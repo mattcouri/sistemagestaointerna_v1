@@ -58,6 +58,10 @@ export function LoginForm() {
     }
   };
 
+  const handleQuickLogin = (email: string, name: string) => {
+    handleDemoLogin(email);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-6">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
@@ -172,55 +176,6 @@ export function LoginForm() {
             >
               <span className="font-medium">Emily Rodriguez</span>
               <span className="text-slate-500 ml-2">emily.rodriguez@demo.com</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder={t('login.namePlaceholder')}
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
-          >
-            <LogIn className="w-5 h-5" />
-            <span>{t('login.signIn')}</span>
-          </button>
-        </form>
-
-        <div className="mt-8 pt-6 border-t border-slate-200">
-          <p className="text-sm text-slate-600 mb-4 text-center">{t('login.quickLogin')}</p>
-          <div className="space-y-2">
-            <button
-              onClick={() => handleQuickLogin('sarah@example.com', 'Sarah Johnson')}
-              className="w-full p-2 text-left bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors text-sm"
-            >
-              <span className="font-medium">Sarah Johnson</span>
-              <span className="text-slate-500 ml-2">sarah@example.com</span>
-            </button>
-            <button
-              onClick={() => handleQuickLogin('mike@example.com', 'Mike Chen')}
-              className="w-full p-2 text-left bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors text-sm"
-            >
-              <span className="font-medium">Mike Chen</span>
-              <span className="text-slate-500 ml-2">mike@example.com</span>
-            </button>
-            <button
-              onClick={() => handleQuickLogin('emily@example.com', 'Emily Rodriguez')}
-              className="w-full p-2 text-left bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors text-sm"
-            >
-              <span className="font-medium">Emily Rodriguez</span>
-              <span className="text-slate-500 ml-2">emily@example.com</span>
             </button>
           </div>
         </div>
