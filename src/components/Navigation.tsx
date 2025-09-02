@@ -1,21 +1,25 @@
 import React from 'react';
 import { User, FolderOpen, Monitor, LogOut, Plus, Sun, Moon, Lightbulb, Languages } from 'lucide-react';
-import { useApp } from '../contexts/AppContext';
+import { useSupabase } from '../hooks/useSupabase';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { User } from '../types';
 
 interface NavigationProps {
   currentView: 'personal' | 'projects' | 'roadmap';
   onViewChange: (view: 'personal' | 'projects' | 'roadmap') => void;
   onCreateProject: () => void;
+  currentUser: User;
 }
 
-export function Navigation({ currentView, onViewChange, onCreateProject }: NavigationProps) {
-  const { currentUser, logout, projects } = useApp();
+export function Navigation({ currentView, onViewChange, onCreateProject, currentUser }: NavigationProps) {
+  const { signOut } = useSupabase();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { language, toggleLanguage, t } = useLanguage();
 
-  if (!currentUser) return null;
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   return (
     <nav className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white p-4 shadow-lg border-b border-slate-200 dark:border-slate-700">
@@ -56,7 +60,7 @@ export function Navigation({ currentView, onViewChange, onCreateProject }: Navig
               }`}
             >
               <FolderOpen className="w-4 h-4" />
-              <span>{t('nav.projects')} ({projects.length})</span>
+              <span>{t('nav.projects')}</span>
             </button>
             
             <button
@@ -102,7 +106,7 @@ export function Navigation({ currentView, onViewChange, onCreateProject }: Navig
           </button>
           
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-colors flex items-center space-x-2"
           >
             <LogOut className="w-4 h-4" />
