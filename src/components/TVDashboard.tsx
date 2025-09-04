@@ -1,32 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { Monitor, RefreshCw, Calendar, Users } from 'lucide-react';
+import { Monitor, RefreshCw, Calendar } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import { ListColumn } from './ListColumn';
-import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { formatWeekRange, getCurrentWeek } from '../utils/dateUtils';
 
 export function TVDashboard() {
-  const { users, projects, moveTask, lastUpdate } = useApp();
+  const { lists, currentUser } = useApp();
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const { draggedTask, handleDragStart, handleDragEnd, handleDragOver } = useDragAndDrop();
 
   const { start, end } = getCurrentWeek();
   const weekRange = formatWeekRange(start, end);
-
-  // Force re-render when data updates
-  useEffect(() => {
-    // This effect will run whenever lastUpdate changes, forcing a re-render
-  }, [lastUpdate]);
 
   // Auto-refresh functionality
   useEffect(() => {
     if (!autoRefresh) return;
 
     const interval = setInterval(() => {
-      // Force re-render to show any updates
       window.location.reload();
-    }, 30000); // Refresh every 30 seconds
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [autoRefresh]);
@@ -59,21 +50,15 @@ export function TVDashboard() {
     }
   };
 
-  const handleDrop = (e: React.DragEvent, targetListId: string) => {
-    e.preventDefault();
-    handleDragEnd();
-    
-    if (!draggedTask) return;
-    
-    const { task, sourceListId } = draggedTask;
-    
-    if (sourceListId === targetListId) return;
+  if (!currentUser) return null;
 
-    moveTask(task.id, sourceListId, targetListId);
-  };
+  // Get all lists (both personal and project)
+  const allLists = lists || [];
 
-  // Get all lists from all users
-  const allLists = users.flatMap(user => user.lists);
+  // Calculate total stats
+  const allTasks = allLists.flatMap(list => list.tasks || []);
+  const totalTasks = allTasks.length;
+  const completedTasks = allTasks.filter(task => task.completed).length;
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white ${
@@ -86,7 +71,7 @@ export function TVDashboard() {
             <div className="flex items-center space-x-4">
               <Monitor className={`${isFullscreen ? 'w-12 h-12' : 'w-8 h-8'} text-blue-400`} />
               <h1 className={`${isFullscreen ? 'text-6xl' : 'text-4xl'} font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent`}>
-                Team Dashboard
+                Personal Dashboard
               </h1>
             </div>
             <div className={`${isFullscreen ? 'text-3xl' : 'text-xl'} text-slate-300 flex items-center space-x-3`}>
@@ -118,31 +103,24 @@ export function TVDashboard() {
           </div>
         </div>
 
-        {/* Team Overview */}
-        <div className={`mt-8 grid grid-cols-2 md:grid-cols-4 gap-6 ${isFullscreen ? 'mt-12' : ''}`}>
-          {users.map(user => {
-            const userTasks = user.lists.flatMap(list => list.tasks);
-            const completedTasks = userTasks.filter(task => task.completed).length;
-            
-            return (
-              <div key={user.id} className="bg-slate-800/50 rounded-lg p-4 backdrop-blur-sm">
-                <div className="flex items-center space-x-3 mb-2">
-                  <div 
-                    className={`${isFullscreen ? 'w-12 h-12 text-xl' : 'w-10 h-10 text-lg'} rounded-full flex items-center justify-center text-white font-bold`}
-                    style={{ backgroundColor: user.color }}
-                  >
-                    {user.name.charAt(0)}
-                  </div>
-                  <div>
-                    <h3 className={`${isFullscreen ? 'text-2xl' : 'text-lg'} font-bold`}>{user.name}</h3>
-                    <p className={`${isFullscreen ? 'text-lg' : 'text-sm'} text-slate-300`}>
-                      {completedTasks}/{userTasks.length} tasks
-                    </p>
-                  </div>
-                </div>
+        {/* User Overview */}
+        <div className={`mt-8 ${isFullscreen ? 'mt-12' : ''}`}>
+          <div className="bg-slate-800/50 rounded-lg p-4 backdrop-blur-sm max-w-md">
+            <div className="flex items-center space-x-3 mb-2">
+              <div 
+                className={`${isFullscreen ? 'w-12 h-12 text-xl' : 'w-10 h-10 text-lg'} rounded-full flex items-center justify-center text-white font-bold`}
+                style={{ backgroundColor: currentUser.color }}
+              >
+                {currentUser.name.charAt(0)}
               </div>
-            );
-          })}
+              <div>
+                <h3 className={`${isFullscreen ? 'text-2xl' : 'text-lg'} font-bold`}>{currentUser.name}</h3>
+                <p className={`${isFullscreen ? 'text-lg' : 'text-sm'} text-slate-300`}>
+                  {completedTasks}/{totalTasks} tasks completed
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -156,69 +134,66 @@ export function TVDashboard() {
             ? `grid-cols-${allLists.length}`
             : 'grid-cols-3 xl:grid-cols-4'
       }`}>
-        {allLists.map((list) => {
-          const user = users.find(u => u.id === list.userId);
-          return (
-            <div key={list.id} className="bg-slate-800/30 rounded-lg p-4 backdrop-blur-sm">
-              <div className="mb-4">
-                <div className="flex items-center space-x-2 mb-2">
-                  <div 
-                    className="w-6 h-6 rounded-full"
-                    style={{ backgroundColor: user?.color }}
-                  />
-                  <span className={`${isFullscreen ? 'text-xl' : 'text-lg'} font-semibold text-white`}>
-                    {user?.name}
-                  </span>
-                </div>
-                <h3 className={`${isFullscreen ? 'text-2xl' : 'text-xl'} font-bold text-white mb-2`}>
-                  {list.title}
-                </h3>
-                {list.strategy && (
-                  <p className={`${isFullscreen ? 'text-lg' : 'text-sm'} text-slate-300 italic mb-4`}>
-                    {list.strategy}
-                  </p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                {list.tasks.map(task => (
-                  <div
-                    key={task.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(task, list.id)}
-                    className={`p-3 bg-slate-700/50 rounded-lg cursor-move transition-all hover:bg-slate-700/70 ${
-                      task.completed ? 'opacity-60' : ''
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-3 h-3 rounded-full ${
-                        task.priority === 'high' ? 'bg-red-500' :
-                        task.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
-                      }`} />
-                      <span className="text-xs text-slate-400 font-mono bg-slate-800/50 px-1 rounded">
-                        #{task.tag}
-                      </span>
-                      <span className={`${isFullscreen ? 'text-lg' : 'text-sm'} text-white ${
-                        task.completed ? 'line-through' : ''
-                      }`}>
-                        {task.title}
-                      </span>
-                      {task.completed && (
-                        <span className="text-green-400 text-sm">✓</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                
-                {list.tasks.length === 0 && (
-                  <div className={`${isFullscreen ? 'p-6 text-lg' : 'p-4 text-sm'} text-center text-slate-400 bg-slate-700/30 rounded-lg border-2 border-dashed border-slate-600`}>
-                    No tasks
-                  </div>
-                )}
-              </div>
+        {allLists.map((list) => (
+          <div key={list.id} className="bg-slate-800/30 rounded-lg p-4 backdrop-blur-sm border border-slate-700/50">
+            <div className="mb-4">
+              <h3 className={`${isFullscreen ? 'text-2xl' : 'text-xl'} font-bold text-white mb-2`}>
+                {list.title}
+              </h3>
+              {list.strategy && (
+                <p className={`${isFullscreen ? 'text-lg' : 'text-sm'} text-slate-300 italic mb-4`}>
+                  {list.strategy}
+                </p>
+              )}
+              {list.type === 'project' && (
+                <span className="text-xs px-2 py-1 bg-blue-500 text-white rounded-full font-medium">
+                  SHARED
+                </span>
+              )}
             </div>
-          );
-        })}
+            
+            <div className="space-y-2">
+              {(list.tasks || []).map(task => (
+                <div
+                  key={task.id}
+                  className={`p-3 bg-slate-700/50 rounded-lg border border-slate-600/40 ${
+                    task.completed ? 'opacity-60' : ''
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-3 h-3 rounded-full ${
+                      task.priority === 'high' ? 'bg-red-500' :
+                      task.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                    }`} />
+                    <span className="text-xs text-slate-400 font-mono bg-slate-800/50 px-1 rounded">
+                      #{task.tag}
+                    </span>
+                    <span className={`${isFullscreen ? 'text-lg' : 'text-sm'} text-white ${
+                      task.completed ? 'line-through' : ''
+                    }`}>
+                      {task.title}
+                    </span>
+                    {task.completed && (
+                      <span className="text-green-400 text-sm">✓</span>
+                    )}
+                  </div>
+                  {task.dueDate && (
+                    <div className="flex items-center space-x-1 text-xs text-slate-300 mt-1">
+                      <Calendar className="w-3 h-3" />
+                      <span>{task.dueDate.toLocaleDateString()}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+              
+              {(list.tasks || []).length === 0 && (
+                <div className={`${isFullscreen ? 'p-6 text-lg' : 'p-4 text-sm'} text-center text-slate-400 bg-slate-700/30 rounded-lg border-2 border-dashed border-slate-600`}>
+                  No tasks
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Auto-refresh indicator */}

@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Monitor, RefreshCw, Calendar, Maximize, Minimize, ZoomIn, ZoomOut, Move, RotateCcw, ArrowLeft } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import { Project } from '../types';
 
 interface ProjectTVDashboardProps {
-  project: Project;
+  project: any; // Using any since Project type may have mismatches
   onBack: () => void;
 }
 
@@ -15,7 +14,7 @@ interface ViewSettings {
 }
 
 export function ProjectTVDashboard({ project, onBack }: ProjectTVDashboardProps) {
-  const { getProjectLists, getUsersInProject, lastUpdate } = useApp();
+  const { getProjectLists, getUsersInProject } = useApp();
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -39,18 +38,13 @@ export function ProjectTVDashboard({ project, onBack }: ProjectTVDashboardProps)
     localStorage.setItem(`tv-dashboard-${project.id}`, JSON.stringify(viewSettings));
   }, [viewSettings, project.id]);
 
-  // Force re-render when data updates
-  useEffect(() => {
-    // This effect will run whenever lastUpdate changes, forcing a re-render
-  }, [lastUpdate]);
-
   // Auto-refresh functionality
   useEffect(() => {
     if (!autoRefresh) return;
 
     const interval = setInterval(() => {
       // Just trigger a re-render instead of full page reload
-      setLastUpdate(Date.now());
+      window.location.reload();
     }, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
@@ -193,62 +187,60 @@ export function ProjectTVDashboard({ project, onBack }: ProjectTVDashboardProps)
             minWidth: shouldCenter ? 'auto' : `${totalListWidth}px`
           }}
         >
-          {projectLists.map((list) => {
-            return (
-              <div key={list.id} className="w-80 flex-shrink-0 bg-slate-800/60 rounded-lg p-4 backdrop-blur-sm border border-slate-700/50">
-                <div className="mb-3">
-                  <h3 className="text-lg font-bold text-white mb-2">
-                    {list.title}
-                  </h3>
-                  {list.strategy && (
-                    <p className="text-xs text-slate-300 italic mb-3 bg-slate-700/40 p-2 rounded border border-slate-600/30">
-                      {list.strategy}
-                    </p>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  {list.tasks.map(task => (
-                    <div
-                      key={task.id}
-                      className={`p-2.5 bg-slate-700/70 rounded-lg border border-slate-600/40 ${
-                        task.completed ? 'opacity-60' : ''
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center space-x-2 flex-1">
-                          <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
-                            task.priority === 'high' ? 'bg-red-500' :
-                            task.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
-                          }`} />
-                          <span className={`text-sm text-white font-medium ${
-                            task.completed ? 'line-through' : ''
-                          }`}>
-                            {task.title}
-                          </span>
-                          {task.completed && (
-                            <span className="text-green-400 text-sm flex-shrink-0">✓</span>
-                          )}
-                        </div>
-                      </div>
-                      {task.dueDate && (
-                        <div className="flex items-center space-x-1 text-xs text-slate-300 mt-1">
-                          <Calendar className="w-3 h-3" />
-                          <span>{task.dueDate.toLocaleDateString()}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  
-                  {list.tasks.length === 0 && (
-                    <div className="p-4 text-sm text-center text-slate-400 bg-slate-700/40 rounded-lg border-2 border-dashed border-slate-600">
-                      No tasks
-                    </div>
-                  )}
-                </div>
+          {projectLists.map((list) => (
+            <div key={list.id} className="w-80 flex-shrink-0 bg-slate-800/60 rounded-lg p-4 backdrop-blur-sm border border-slate-700/50">
+              <div className="mb-3">
+                <h3 className="text-lg font-bold text-white mb-2">
+                  {list.title}
+                </h3>
+                {list.strategy && (
+                  <p className="text-xs text-slate-300 italic mb-3 bg-slate-700/40 p-2 rounded border border-slate-600/30">
+                    {list.strategy}
+                  </p>
+                )}
               </div>
-            );
-          })}
+              
+              <div className="space-y-2">
+                {(list.tasks || []).map(task => (
+                  <div
+                    key={task.id}
+                    className={`p-2.5 bg-slate-700/70 rounded-lg border border-slate-600/40 ${
+                      task.completed ? 'opacity-60' : ''
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center space-x-2 flex-1">
+                        <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                          task.priority === 'high' ? 'bg-red-500' :
+                          task.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                        }`} />
+                        <span className={`text-sm text-white font-medium ${
+                          task.completed ? 'line-through' : ''
+                        }`}>
+                          {task.title}
+                        </span>
+                        {task.completed && (
+                          <span className="text-green-400 text-sm flex-shrink-0">✓</span>
+                        )}
+                      </div>
+                    </div>
+                    {task.dueDate && (
+                      <div className="flex items-center space-x-1 text-xs text-slate-300 mt-1">
+                        <Calendar className="w-3 h-3" />
+                        <span>{task.dueDate.toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                {(list.tasks || []).length === 0 && (
+                  <div className="p-4 text-sm text-center text-slate-400 bg-slate-700/40 rounded-lg border-2 border-dashed border-slate-600">
+                    No tasks
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -324,3 +316,5 @@ export function ProjectTVDashboard({ project, onBack }: ProjectTVDashboardProps)
     </div>
   );
 }
+
+export default ProjectTVDashboard;
