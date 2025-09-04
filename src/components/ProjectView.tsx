@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Monitor, Users, Target, Plus, User } from 'lucide-react';
+import { ArrowLeft, Monitor, Users, Target, Plus } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ListColumn } from './ListColumn';
@@ -7,7 +7,7 @@ import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
 
 interface ProjectViewProps {
-  project: any; // Using any since Project type may have mismatches
+  project: any;
   onBack: () => void;
   onTVDashboard: () => void;
 }
@@ -15,6 +15,7 @@ interface ProjectViewProps {
 export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps) {
   const { getProjectLists, getUsersInProject, moveTask, createList, reorderProjectLists } = useApp();
   const { t } = useLanguage();
+  const [projectLists, setProjectLists] = useState<any[]>([]);
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
   const { draggedTask, handleDragStart, handleDragEnd, handleDragOver } = useDragAndDrop();
@@ -26,8 +27,16 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
     handleListDrop 
   } = useListDragAndDrop();
 
-  const projectLists = getProjectLists(project.id);
   const projectUsers = getUsersInProject(project.id);
+
+  useEffect(() => {
+    loadProjectLists();
+  }, [project.id]);
+
+  const loadProjectLists = async () => {
+    const lists = await getProjectLists(project.id);
+    setProjectLists(lists);
+  };
 
   const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +46,7 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
         await createList(newListTitle.trim(), 'project', project.id);
         setNewListTitle('');
         setIsCreatingList(false);
+        await loadProjectLists();
       } catch (error) {
         console.error('Error creating list:', error);
       }
