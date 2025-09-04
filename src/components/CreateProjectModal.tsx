@@ -1,18 +1,16 @@
 import React, { useState } from 'react';
-import { X, Users, User, Palette } from 'lucide-react';
+import { X, Palette } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import { User as UserType } from '../types';
 
 interface CreateProjectModalProps {
   onClose: () => void;
-  availableUsers: UserType[];
+  availableUsers: any[]; // Simplified since we don't have users system yet
 }
 
 export function CreateProjectModal({ onClose, availableUsers }: CreateProjectModalProps) {
   const { createProject, currentUser } = useApp();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedColor, setSelectedColor] = useState('#3B82F6');
 
   const colorOptions = [
@@ -24,29 +22,20 @@ export function CreateProjectModal({ onClose, availableUsers }: CreateProjectMod
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() && currentUser) {
-      // Always include the current user in the project
-      const assignedUserIds = [currentUser.id, ...selectedUsers];
-      createProject(name.trim(), description.trim(), assignedUserIds, selectedColor);
+      // For now, just create project with current user
+      createProject(name.trim(), description.trim(), [], selectedColor);
       onClose();
     }
   };
 
-  const toggleUser = (userId: string) => {
-    setSelectedUsers(prev => 
-      prev.includes(userId) 
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
-    );
-  };
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold text-slate-800">Create New Project</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b dark:border-slate-700">
+          <h2 className="text-xl font-semibold text-slate-800 dark:text-white">Create New Project</h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
@@ -54,43 +43,43 @@ export function CreateProjectModal({ onClose, availableUsers }: CreateProjectMod
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               Project Name
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
               placeholder="Enter project name"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               Description
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none dark:bg-slate-700 dark:text-white"
               rows={3}
               placeholder="Describe the project goals and objectives"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               Project Color
             </label>
             <div className="flex items-center space-x-3 mb-2">
-              <Palette className="w-5 h-5 text-slate-600" />
+              <Palette className="w-5 h-5 text-slate-600 dark:text-slate-400" />
               <div 
-                className="w-8 h-8 rounded-lg border-2 border-slate-300"
+                className="w-8 h-8 rounded-lg border-2 border-slate-300 dark:border-slate-600"
                 style={{ backgroundColor: selectedColor }}
               />
-              <span className="text-sm text-slate-600">Selected Color</span>
+              <span className="text-sm text-slate-600 dark:text-slate-400">Selected Color</span>
             </div>
             <div className="grid grid-cols-6 gap-2">
               {colorOptions.map(color => (
@@ -100,49 +89,13 @@ export function CreateProjectModal({ onClose, availableUsers }: CreateProjectMod
                   onClick={() => setSelectedColor(color)}
                   className={`w-8 h-8 rounded-lg border-2 transition-all ${
                     selectedColor === color 
-                      ? 'border-slate-800 scale-110' 
-                      : 'border-slate-300 hover:border-slate-400'
+                      ? 'border-slate-800 dark:border-slate-200 scale-110' 
+                      : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
                   }`}
                   style={{ backgroundColor: color }}
                 />
               ))}
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Assign Team Members
-            </label>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {availableUsers.map(user => (
-                <label
-                  key={user.id}
-                  className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedUsers.includes(user.id)}
-                    onChange={() => toggleUser(user.id)}
-                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
-                  />
-                  <div className="flex items-center space-x-2">
-                    <div 
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium"
-                      style={{ backgroundColor: user.color }}
-                    >
-                      <User className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-slate-800">{user.name}</p>
-                      <p className="text-sm text-slate-500">{user.email}</p>
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </div>
-            <p className="text-sm text-slate-500 mt-2">
-              You will be automatically added to this project
-            </p>
           </div>
 
           <div className="flex space-x-3 pt-4">
@@ -155,7 +108,7 @@ export function CreateProjectModal({ onClose, availableUsers }: CreateProjectMod
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-slate-300 hover:bg-slate-400 text-slate-700 p-3 rounded-lg transition-colors"
+              className="flex-1 bg-slate-300 hover:bg-slate-400 dark:bg-slate-600 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 p-3 rounded-lg transition-colors"
             >
               Cancel
             </button>
