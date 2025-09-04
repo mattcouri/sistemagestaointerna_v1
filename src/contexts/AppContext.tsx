@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User as SupabaseUser } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { useSupabase } from '../hooks/useSupabase';
 import { generateId, generateUniqueTag } from '../utils/taskUtils';
 
@@ -112,7 +113,7 @@ const PRESET_COLORS = [
 ];
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const { supabase, user: supabaseUser } = useSupabase();
+  const { user: supabaseUser } = useSupabase();
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [lists, setLists] = useState<List[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
