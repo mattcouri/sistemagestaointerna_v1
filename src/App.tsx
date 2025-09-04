@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
-import { AppProvider } from './contexts/AppContext';
+import React from 'react';
+import { AppProvider, useApp } from './contexts/AppContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
-import { useSupabase } from './hooks/useSupabase';
 import { LoginForm } from './components/LoginForm';
 import { AuthenticatedApp } from './components/AuthenticatedApp';
 
 function AppContent() {
-  const { user, loading } = useSupabase();
+  const { currentUser, loading, isAuthenticated } = useApp();
 
   if (loading) {
     return (
@@ -20,11 +19,11 @@ function AppContent() {
     );
   }
 
-  if (!user) {
+  if (!isAuthenticated || !currentUser) {
     return <LoginForm />;
   }
 
-  return <AuthenticatedApp user={user} />;
+  return <AuthenticatedApp user={currentUser} />;
 }
 
 function App() {
