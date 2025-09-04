@@ -30,7 +30,7 @@ export function Navigation({ currentView, onViewChange, onCreateProject, current
               className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
               style={{ backgroundColor: currentUser.color }}
             >
-              <User className="w-5 h-5" />
+              <UserIcon className="w-5 h-5" />
             </div>
             <div>
               <h2 className="font-semibold text-slate-800 dark:text-white">{currentUser.name}</h2>
@@ -47,7 +47,7 @@ export function Navigation({ currentView, onViewChange, onCreateProject, current
                   : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
               }`}
             >
-              <User className="w-4 h-4" />
+              <UserIcon className="w-4 h-4" />
               <span>{t('nav.personal')}</span>
             </button>
             
