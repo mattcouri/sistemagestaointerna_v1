@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, FolderOpen, Monitor, LogOut, Plus, Sun, Moon, Lightbulb, Languages } from 'lucide-react';
+import { User as UserIcon, FolderOpen, Monitor, LogOut, Plus, Sun, Moon, Lightbulb, Languages } from 'lucide-react';
 import { useSupabase } from '../hooks/useSupabase';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
