@@ -74,7 +74,7 @@ interface AppContextType {
   createProject: (name: string, description: string, assignedUserIds: string[], color?: string) => Promise<void>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
-  getProjectLists: (projectId: string) => List[];
+  getProjectLists: (projectId: string) => Promise<List[]>;
   getUsersInProject: (projectId: string) => User[];
   
   createList: (title: string, type: 'personal' | 'project', projectId?: string) => Promise<void>;
@@ -357,8 +357,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const getProjectLists = (projectId: string): List[] => {
-    return lists.filter(list => list.project_id === projectId && !list.id.startsWith('project-'));
+  const getProjectLists = async (projectId: string): Promise<List[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('lists')
+        .select(`
+          *,
+          tasks (*)
+        `)
+        .eq('project_id', projectId)
+        .order('position', { ascending: true });
+
+      if (error) throw error;
+
+      const listsWithDates = (data || []).map(list => ({
+        ...list,
+        tasks: (list.tasks || []).map(task => ({
+          ...task,
+          dueDate: task.due_date ? new Date(task.due_date) : undefined
+        }))
+      }));
+
+      return listsWithDates;
+    } catch (error) {
+      console.error('Error loading project lists:', error);
+      return [];
+    }
   };
 
   const getUsersInProject = (projectId: string): User[] => {
