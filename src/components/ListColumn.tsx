@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
 import { Plus, Target, Lock, FolderOpen, MoreVertical, User } from 'lucide-react';
-import { List, Task, User as UserType } from '../types';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { TaskItem } from './TaskItem';
 
 interface ListColumnProps {
-  list: List;
-  onDragStart: (task: Task, sourceListId: string) => void;
+  list: any; // Using any since List type has mismatches
+  onDragStart: (task: any, sourceListId: string) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent, targetListId: string) => void;
   compact?: boolean;
-  projectUsers?: UserType[];
+  projectUsers?: any[];
   isPersonalDashboard?: boolean;
 }
 
@@ -21,39 +20,44 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskPriority, setNewTaskPriority] = useState<Task['priority']>('medium');
+  const [newTaskPriority, setNewTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [newTaskAssignee, setNewTaskAssignee] = useState<string>('');
   const [newTaskDueDate, setNewTaskDueDate] = useState<string>('');
   const [selectedTargetList, setSelectedTargetList] = useState<string>('');
   const [editingStrategy, setEditingStrategy] = useState(false);
-  const [strategyText, setStrategyText] = useState(list.strategy);
+  const [strategyText, setStrategyText] = useState(list.strategy || '');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(list.title);
 
   // Get project info if this is a project list
-  const project = list.projectId ? projects.find(p => p.id === list.projectId) : null;
-  const projectLists = list.projectId ? getProjectLists(list.projectId) : [];
+  const project = list.project_id ? projects.find(p => p.id === list.project_id) : null;
+  const projectLists = list.project_id ? getProjectLists(list.project_id) : [];
   
   // Set default target list when adding task
   React.useEffect(() => {
-    if (isAddingTask && list.projectId && !selectedTargetList) {
+    if (isAddingTask && list.project_id && !selectedTargetList) {
       setSelectedTargetList(list.id);
     }
-  }, [isAddingTask, list.projectId, list.id, selectedTargetList]);
+  }, [isAddingTask, list.project_id, list.id, selectedTargetList]);
+
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (newTaskTitle.trim()) {
-      const targetListId = isPersonalDashboard && list.projectId && selectedTargetList 
+      const targetListId = isPersonalDashboard && list.project_id && selectedTargetList 
         ? selectedTargetList 
         : list.id;
         
-      addTaskToList(targetListId, {
+      // Convert date string to ISO format for Supabase
+      const taskData: any = {
         title: newTaskTitle.trim(),
         priority: newTaskPriority,
         completed: false,
-        assignedTo: newTaskAssignee || undefined,
-        dueDate: newTaskDueDate ? new Date(newTaskDueDate) : undefined
-      });
+        position: (list.tasks?.length || 0),
+        assigned_to: newTaskAssignee || undefined,
+        due_date: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : undefined
+      };
+
+      addTaskToList(targetListId, taskData);
       setNewTaskTitle('');
       setNewTaskAssignee('');
       setNewTaskDueDate('');
@@ -72,14 +76,13 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
       updateList(list.id, { title: titleText.trim() });
       setEditingTitle(false);
     } else {
-      // Reset to original title if empty
       setTitleText(list.title);
       setEditingTitle(false);
     }
   };
 
-  const completedTasks = list.tasks.filter(task => task.completed).length;
-  const totalTasks = list.tasks.length;
+  const completedTasks = (list.tasks || []).filter(task => task.completed).length;
+  const totalTasks = list.tasks?.length || 0;
 
   return (
     <div
@@ -174,7 +177,7 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
           <span>{completedTasks}/{totalTasks} completed</span>
           {list.type === 'project' && (
             <span className="text-xs px-2 py-1 bg-blue-500 text-white dark:bg-blue-600 rounded-full font-medium shadow-sm">
-              {t('personal.shared')}
+              SHARED
             </span>
           )}
         </div>
@@ -189,22 +192,24 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
       )}
 
       {/* Strategy Section */}
-      <div className={`${compact ? 'p-2' : 'p-3'} ${
-        list.type === 'project' 
-          ? 'bg-white dark:bg-slate-800' 
-          : 'bg-white dark:bg-slate-800'
-      } border-b border-slate-200 dark:border-slate-600`}>
+      <div className={`${compact ? 'p-2' : 'p-3'} bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600`}>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-2">
             <Target className="w-4 h-4 text-blue-500 dark:text-blue-400" />
             <span className={`${compact ? 'text-xs' : 'text-xs'} font-medium text-blue-600 dark:text-blue-400`}>
-              {t('personal.strategy')}
+              Strategy
             </span>
           </div>
           {!compact && (
             <button
-              onClick={() => setEditingStrategy(!editingStrategy)}
-              className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors text-xs"
+              onClick={() => {
+                if (editingStrategy) {
+                  handleUpdateStrategy();
+                } else {
+                  setEditingStrategy(true);
+                }
+              }}
+              className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
             >
               {editingStrategy ? 'Save' : 'Edit'}
             </button>
@@ -212,54 +217,34 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
         </div>
         
         {editingStrategy && !compact ? (
-          <div>
-            <textarea
-              value={strategyText}
-              onChange={(e) => setStrategyText(e.target.value)}
-              className="w-full p-2 text-xs bg-white dark:bg-slate-700 dark:text-white border border-slate-200 dark:border-slate-600 rounded resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              rows={2}
-              placeholder="Enter focus areas for this list..."
-            />
-            <button
-              onClick={handleUpdateStrategy}
-              className="mt-1 text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded transition-colors"
-            >
-              Save Strategy
-            </button>
-          </div>
+          <textarea
+            value={strategyText}
+            onChange={(e) => setStrategyText(e.target.value)}
+            className="w-full p-2 text-xs bg-white dark:bg-slate-700 dark:text-white border border-slate-200 dark:border-slate-600 rounded resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            rows={2}
+            placeholder="Enter focus areas for this list..."
+          />
         ) : (
           <p className={`${compact ? 'text-xs' : 'text-xs'} text-slate-600 dark:text-slate-300 italic font-bold ${!list.strategy ? 'text-slate-400 dark:text-slate-500' : ''}`}>
-            {list.strategy || t('personal.noStrategy')}
+            {list.strategy || 'No strategy set'}
           </p>
         )}
       </div>
 
       {/* Tasks Section */}
-      <div className={`${compact ? 'p-2' : 'p-3'} flex-1 ${
-        list.type === 'project' 
-          ? 'bg-white dark:bg-slate-800' 
-          : 'bg-white dark:bg-slate-800'
-      }`}>
+      <div className={`${compact ? 'p-2' : 'p-3'} flex-1 bg-white dark:bg-slate-800`}>
         {!compact && !isAddingTask && (
           <button
             onClick={() => setIsAddingTask(true)}
-            className={`w-full p-2 mb-2 border-2 border-dashed rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 ${
-              list.type === 'project'
-                ? 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}
+            className="w-full p-2 mb-2 border-2 border-dashed rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
           >
             <Plus className="w-3 h-3" />
-            <span className="text-sm">{t('task.addTask')}</span>
+            <span className="text-sm">Add Task</span>
           </button>
         )}
 
         {isAddingTask && !compact && (
-          <form onSubmit={handleAddTask} className={`space-y-2 mb-2 p-3 rounded-lg ${
-            list.type === 'project' 
-              ? 'bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600' 
-              : 'bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600'
-          }`}>
+          <form onSubmit={handleAddTask} className="space-y-2 mb-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600">
             <input
               type="text"
               value={newTaskTitle}
@@ -270,12 +255,12 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
             />
             <select
               value={newTaskPriority}
-              onChange={(e) => setNewTaskPriority(e.target.value as Task['priority'])}
+              onChange={(e) => setNewTaskPriority(e.target.value as 'low' | 'medium' | 'high')}
               className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
             >
-              <option value="low">{t('task.lowPriority')}</option>
-              <option value="medium">{t('task.mediumPriority')}</option>
-              <option value="high">{t('task.highPriority')}</option>
+              <option value="low">Low Priority</option>
+              <option value="medium">Medium Priority</option>
+              <option value="high">High Priority</option>
             </select>
             <input
               type="date"
@@ -284,7 +269,7 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
               className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
               placeholder="Due date (optional)"
             />
-            {isPersonalDashboard && list.projectId && projectLists.length > 1 && (
+            {isPersonalDashboard && list.project_id && projectLists.length > 1 && (
               <select
                 value={selectedTargetList}
                 onChange={(e) => setSelectedTargetList(e.target.value)}
@@ -294,7 +279,7 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
                 <option value="">Select list...</option>
                 {projectLists.map(pList => (
                   <option key={pList.id} value={pList.id}>
-                    {pList.title} ({pList.tasks.length} tasks)
+                    {pList.title} ({pList.tasks?.length || 0} tasks)
                   </option>
                 ))}
               </select>
@@ -305,7 +290,7 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
                 onChange={(e) => setNewTaskAssignee(e.target.value)}
                 className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
               >
-                <option value="">{t('task.unassigned')}</option>
+                <option value="">Unassigned</option>
                 {projectUsers.map(user => (
                   <option key={user.id} value={user.id}>
                     {user.name}
@@ -318,7 +303,7 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
                 type="submit"
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white p-2 text-sm rounded-lg transition-colors"
               >
-                {t('common.create')}
+                Create
               </button>
               <button
                 type="button"
@@ -329,7 +314,7 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
                 }}
                 className="flex-1 bg-slate-300 hover:bg-slate-400 text-slate-700 p-2 text-sm rounded-lg transition-colors"
               >
-                {t('common.cancel')}
+                Cancel
               </button>
             </div>
           </form>
@@ -337,7 +322,7 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
 
         {/* Task List */}
         <div className={`space-y-${compact ? '1' : '1'}`}>
-          {list.tasks.map((task) => (
+          {(list.tasks || []).map((task: any) => (
             <TaskItem
               key={task.id}
               task={task}
@@ -348,11 +333,11 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
             />
           ))}
           
-          {list.tasks.length === 0 && (
+          {(list.tasks?.length || 0) === 0 && (
             <div className={`${compact ? 'p-3 text-xs' : 'p-4 text-sm'} text-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-700/50 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-600`}>
               <Target className={`${compact ? 'w-6 h-6' : 'w-8 h-8'} mx-auto mb-1 text-slate-300 dark:text-slate-500`} />
-              <p className="text-xs">{t('personal.noTasks')}</p>
-              {!compact && <p className="text-xs mt-1">{t('personal.getStarted')}</p>}
+              <p className="text-xs">No tasks yet</p>
+              {!compact && <p className="text-xs mt-1">Add a task to get started</p>}
             </div>
           )}
         </div>
