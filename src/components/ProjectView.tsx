@@ -2,19 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Monitor, Users, Target, Plus, User } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { Project } from '../types';
 import { ListColumn } from './ListColumn';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
 
 interface ProjectViewProps {
-  project: Project;
+  project: any; // Using any since Project type may have mismatches
   onBack: () => void;
   onTVDashboard: () => void;
 }
 
 export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps) {
-  const { getProjectLists, getUsersInProject, moveTask, createList, reorderProjectLists, lastUpdate } = useApp();
+  const { getProjectLists, getUsersInProject, moveTask, createList, reorderProjectLists } = useApp();
   const { t } = useLanguage();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -30,17 +29,17 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
   const projectLists = getProjectLists(project.id);
   const projectUsers = getUsersInProject(project.id);
 
-  // Force re-render when data updates
-  useEffect(() => {
-    // This effect will run whenever lastUpdate changes, forcing a re-render
-  }, [lastUpdate]);
-
-  const handleCreateList = (e: React.FormEvent) => {
+  const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newListTitle.trim()) {
-      createList(newListTitle.trim(), 'project', project.id);
-      setNewListTitle('');
-      setIsCreatingList(false);
+      try {
+        console.log('Creating list with projectId:', project.id);
+        await createList(newListTitle.trim(), 'project', project.id);
+        setNewListTitle('');
+        setIsCreatingList(false);
+      } catch (error) {
+        console.error('Error creating list:', error);
+      }
     }
   };
 
@@ -68,7 +67,6 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
   return (
     <div className="p-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-4">
             <button
@@ -124,9 +122,7 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
           </div>
         </div>
 
-        {/* Project Kanban Board */}
         <div className="flex gap-6 overflow-x-auto pb-4">
-          {/* Existing Project Lists */}
           {projectLists.map((list, index) => (
             <div
               key={list.id}
@@ -147,7 +143,6 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
             </div>
           ))}
 
-          {/* Create New List */}
           <div className="w-72 flex-shrink-0">
             {!isCreatingList ? (
               <button
