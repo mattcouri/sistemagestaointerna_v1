@@ -195,28 +195,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser) return;
 
     try {
-      const { data, error } = await supabase
+      // Get projects user created
+      const { data: ownedProjects, error: ownedError } = await supabase
         .from('projects')
         .select('*')
-        .or(`created_by.eq.${currentUser.id},id.in.(${await getProjectMembershipIds()})`);
+        .eq('created_by', currentUser.id);
 
-      if (error) throw error;
-      setProjects(data || []);
+      if (ownedError) throw ownedError;
+
+      // Get projects user is a member of
+      const { data: memberships, error: memberError } = await supabase
+        .from('project_members')
+        .select('project_id')
+        .eq('user_id', currentUser.id);
+
+      let memberProjects: any[] = [];
+      if (!memberError && memberships && memberships.length > 0) {
+        const projectIds = memberships.map(m => m.project_id);
+        const { data, error } = await supabase
+          .from('projects')
+          .select('*')
+          .in('id', projectIds);
+        
+        if (!error) memberProjects = data || [];
+      }
+
+      // Combine and deduplicate
+      const allProjects = [...(ownedProjects || []), ...memberProjects];
+      const uniqueProjects = allProjects.filter((project, index, self) => 
+        index === self.findIndex(p => p.id === project.id)
+      );
+
+      setProjects(uniqueProjects);
     } catch (error) {
       console.error('Error loading projects:', error);
+      setProjects([]);
     }
-  };
-
-  const getProjectMembershipIds = async () => {
-    if (!currentUser) return '';
-    
-    const { data, error } = await supabase
-      .from('project_members')
-      .select('project_id')
-      .eq('user_id', currentUser.id);
-    
-    if (error || !data) return '';
-    return data.map(pm => pm.project_id).join(',');
   };
 
   const loadRoadmapIdeas = async () => {
