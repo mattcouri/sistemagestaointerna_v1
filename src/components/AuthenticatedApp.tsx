@@ -1,48 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { User as SupabaseUser } from '@supabase/supabase-js';
+import React, { useState } from 'react';
 import { Navigation } from './Navigation';
 import { PersonalDashboard } from './PersonalDashboard';
 import { ProjectsDashboard } from './ProjectsDashboard';
 import { DevRoadmap } from './DevRoadmap';
-import { profileService } from '../services/database';
-import { User } from '../types';
+import { useApp } from '../contexts/AppContext';
 
 interface AuthenticatedAppProps {
-  user: SupabaseUser;
+  user: any; // We'll get user from AppContext instead
 }
 
 export function AuthenticatedApp({ user }: AuthenticatedAppProps) {
   const [currentView, setCurrentView] = useState<'personal' | 'projects' | 'roadmap'>('personal');
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function setupUser() {
-      try {
-        // Try to get existing profile
-        let dbUser;
-        try {
-          dbUser = await profileService.getProfile(user.id);
-        } catch (error) {
-          // Profile doesn't exist, create it (should be automatic via trigger)
-          dbUser = await profileService.createProfile({
-            id: user.id,
-            name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
-            email: user.email || '',
-            color: '#3B82F6'
-          });
-        }
-        
-        setCurrentUser(dbUser);
-      } catch (error) {
-        console.error('Error setting up profile:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    setupUser();
-  }, [user]);
+  const { currentUser, loading } = useApp();
 
   if (loading || !currentUser) {
     return (
