@@ -1,12 +1,12 @@
 import { supabase } from '../lib/supabase';
 import { User, Project, List, Task, RoadmapIdea } from '../types';
 
-// User operations
-export const userService = {
-  async createUser(userData: Omit<User, 'id' | 'lists'>) {
+// Profile operations (replaces user operations)
+export const profileService = {
+  async createProfile(profileData: Omit<User, 'id' | 'lists'>) {
     const { data, error } = await supabase
-      .from('users')
-      .insert([userData])
+      .from('profiles')
+      .insert([profileData])
       .select()
       .single();
     
@@ -14,9 +14,9 @@ export const userService = {
     return data;
   },
 
-  async getUser(id: string) {
+  async getProfile(id: string) {
     const { data, error } = await supabase
-      .from('users')
+      .from('profiles')
       .select('*')
       .eq('id', id)
       .single();
@@ -25,9 +25,9 @@ export const userService = {
     return data;
   },
 
-  async getAllUsers() {
+  async getAllProfiles() {
     const { data, error } = await supabase
-      .from('users')
+      .from('profiles')
       .select('*')
       .order('name');
     
@@ -35,9 +35,9 @@ export const userService = {
     return data;
   },
 
-  async updateUser(id: string, updates: Partial<User>) {
+  async updateProfile(id: string, updates: Partial<User>) {
     const { data, error } = await supabase
-      .from('users')
+      .from('profiles')
       .update(updates)
       .eq('id', id)
       .select()
@@ -99,12 +99,12 @@ export const projectService = {
       .from('project_members')
       .select(`
         user_id,
-        users(*)
+        profiles(*)
       `)
       .eq('project_id', projectId);
     
     if (error) throw error;
-    return data.map(item => item.users);
+    return data.map(item => item.profiles);
   },
 
   async updateProject(id: string, updates: Partial<Project>) {
@@ -170,7 +170,7 @@ export const listService = {
       .select(`
         *,
         tasks(*),
-        users(name, email, color)
+        profiles(name, email, color)
       `)
       .eq('project_id', projectId)
       .order('position');
@@ -285,7 +285,7 @@ export const roadmapService = {
       .from('roadmap_ideas')
       .select(`
         *,
-        users(name, email, color)
+        profiles(name, email, color)
       `)
       .order('created_at', { ascending: false });
     
@@ -314,3 +314,6 @@ export const roadmapService = {
     if (error) throw error;
   }
 };
+
+// Legacy export for backward compatibility
+export const userService = profileService;

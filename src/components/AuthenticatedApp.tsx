@@ -4,7 +4,7 @@ import { Navigation } from './Navigation';
 import { PersonalDashboard } from './PersonalDashboard';
 import { ProjectsDashboard } from './ProjectsDashboard';
 import { DevRoadmap } from './DevRoadmap';
-import { userService } from '../services/database';
+import { profileService } from '../services/database';
 import { User } from '../types';
 
 interface AuthenticatedAppProps {
@@ -19,13 +19,13 @@ export function AuthenticatedApp({ user }: AuthenticatedAppProps) {
   useEffect(() => {
     async function setupUser() {
       try {
-        // Try to get existing user
+        // Try to get existing profile
         let dbUser;
         try {
-          dbUser = await userService.getUser(user.id);
+          dbUser = await profileService.getProfile(user.id);
         } catch (error) {
-          // User doesn't exist, create them
-          dbUser = await userService.createUser({
+          // Profile doesn't exist, create it (should be automatic via trigger)
+          dbUser = await profileService.createProfile({
             id: user.id,
             name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
             email: user.email || '',
@@ -35,7 +35,7 @@ export function AuthenticatedApp({ user }: AuthenticatedAppProps) {
         
         setCurrentUser(dbUser);
       } catch (error) {
-        console.error('Error setting up user:', error);
+        console.error('Error setting up profile:', error);
       } finally {
         setLoading(false);
       }
