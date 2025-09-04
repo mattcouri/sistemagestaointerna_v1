@@ -1,29 +1,107 @@
-import React, { createContext, useContext, useReducer, useEffect, useState } from 'react';
-import { AppState, User, Project, List, Task, RoadmapIdea } from '../types';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { User as SupabaseUser } from '@supabase/supabase-js';
+import { useSupabase } from '../hooks/useSupabase';
 import { generateId, generateUniqueTag } from '../utils/taskUtils';
 
-interface AppContextType extends AppState {
-  login: (email: string, name: string) => void;
-  logout: () => void;
-  createProject: (name: string, description: string, assignedUserIds: string[], color?: string) => void;
-  updateProject: (projectId: string, updates: Partial<Project>) => void;
-  deleteProject: (projectId: string) => void;
-  createList: (title: string, type: 'personal' | 'project', projectId?: string) => void;
-  updateList: (listId: string, updates: Partial<List>) => void;
-  deleteList: (listId: string) => void;
-  addTaskToList: (listId: string, task: Omit<Task, 'id' | 'createdAt'>) => void;
-  updateTask: (listId: string, taskId: string, updates: Partial<Task>) => void;
-  deleteTask: (listId: string, taskId: string) => void;
-  moveTask: (taskId: string, sourceListId: string, targetListId: string) => void;
-  getProjectLists: (projectId: string) => List[];
-  getUsersInProject: (projectId: string) => User[];
-  reorderLists: (userId: string, listIds: string[]) => void;
-  reorderProjectLists: (projectId: string, listIds: string[]) => void;
-  addRoadmapIdea: (ideaData: Omit<RoadmapIdea, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>) => void;
-  updateRoadmapIdea: (ideaId: string, updates: Partial<RoadmapIdea>) => void;
-  deleteRoadmapIdea: (ideaId: string) => void;
+// Updated types to match database schema
+interface Profile {
+  id: string;
+  name: string;
+  email: string;
+  color: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  created_by: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface List {
+  id: string;
+  title: string;
+  strategy: string;
+  type: 'personal' | 'project';
+  project_id?: string;
+  user_id: string;
+  color?: string;
+  position: number;
+  created_at?: string;
+  updated_at?: string;
+  tasks?: Task[];
+}
+
+interface Task {
+  id: string;
+  tag: string;
+  title: string;
+  description?: string;
+  priority: 'low' | 'medium' | 'high';
+  completed: boolean;
+  list_id: string;
+  assigned_to?: string;
+  due_date?: string;
+  position: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface RoadmapIdea {
+  id: string;
+  title: string;
+  description: string;
+  category: 'new-feature' | 'improvement' | 'next-steps' | 'bug';
+  image_url?: string;
+  created_by: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface AppContextType {
+  currentUser: Profile | null;
+  isAuthenticated: boolean;
+  lists: List[];
+  projects: Project[];
   roadmapIdeas: RoadmapIdea[];
+  loading: boolean;
+  
+  // Auth functions
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, name: string) => Promise<void>;
+  logout: () => Promise<void>;
+  
+  // Project functions
+  createProject: (name: string, description: string, assignedUserIds: string[], color?: string) => Promise<void>;
+  updateProject: (projectId: string, updates: Partial<Project>) => Promise<void>;
+  deleteProject: (projectId: string) => Promise<void>;
+  
+  // List functions
+  createList: (title: string, type: 'personal' | 'project', projectId?: string) => Promise<void>;
+  updateList: (listId: string, updates: Partial<List>) => Promise<void>;
+  deleteList: (listId: string) => Promise<void>;
+  reorderLists: (userId: string, listIds: string[]) => Promise<void>;
+  
+  // Task functions
+  addTaskToList: (listId: string, task: Omit<Task, 'id' | 'created_at'>) => Promise<void>;
+  updateTask: (listId: string, taskId: string, updates: Partial<Task>) => Promise<void>;
+  deleteTask: (listId: string, taskId: string) => Promise<void>;
+  moveTask: (taskId: string, sourceListId: string, targetListId: string) => Promise<void>;
+  
+  // Roadmap functions
+  addRoadmapIdea: (ideaData: Omit<RoadmapIdea, 'id' | 'created_by' | 'created_at' | 'updated_at'>) => Promise<void>;
+  updateRoadmapIdea: (ideaId: string, updates: Partial<RoadmapIdea>) => Promise<void>;
+  deleteRoadmapIdea: (ideaId: string) => Promise<void>;
+  
+  // Utility functions
+  getProjectLists: (projectId: string) => List[];
+  getUsersInProject: (projectId: string) => Profile[];
+  refreshData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -33,570 +111,479 @@ const PRESET_COLORS = [
   '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'
 ];
 
-// Sample data for demonstration
-const createSampleData = (): AppState => {
-  const users: User[] = [
-    {
-      id: 'user-1',
-      name: 'Sarah Johnson',
-      email: 'sarah@example.com',
-      color: '#3B82F6',
-      lists: []
-    },
-    {
-      id: 'user-2',
-      name: 'Mike Chen',
-      email: 'mike@example.com',
-      color: '#10B981',
-      lists: []
-    },
-    {
-      id: 'user-3',
-      name: 'Emily Rodriguez',
-      email: 'emily@example.com',
-      color: '#8B5CF6',
-      lists: []
-    }
-  ];
-
-  const projects: Project[] = [
-    {
-      id: 'project-1',
-      name: 'Website Redesign',
-      description: 'Complete overhaul of company website',
-      color: '#3B82F6',
-      createdBy: 'user-1',
-      assignedUsers: ['user-1', 'user-2'],
-      createdAt: new Date()
-    }
-  ];
-
-  // Add sample lists to users
-  users[0].lists = [
-    {
-      id: 'list-1',
-      title: 'Personal Development',
-      strategy: 'Focus on skill improvement and learning new technologies',
-      tasks: [
-        {
-          id: generateId(),
-          tag: generateUniqueTag(),
-          title: 'Complete React course',
-          priority: 'high',
-          completed: false,
-          createdAt: new Date()
-        }
-      ],
-      type: 'personal',
-      userId: 'user-1'
-    },
-    {
-      id: 'list-2',
-      title: 'Website Redesign',
-      strategy: 'Lead the design phase and coordinate with development team',
-      tasks: [
-        {
-          id: generateId(),
-          tag: generateUniqueTag(),
-          title: 'Create wireframes',
-          priority: 'high',
-          completed: false,
-          createdAt: new Date()
-        }
-      ],
-      type: 'project',
-      projectId: 'project-1',
-      userId: 'user-1',
-      color: '#3B82F6'
-    }
-  ];
-
-  return {
-    currentUser: null,
-    users,
-    projects,
-    isAuthenticated: false,
-    roadmapIdeas: []
-  };
-};
-
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [appData, setAppData] = useLocalStorage<AppState>('kanban-app-data', createSampleData());
-  const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
+  const { supabase, user: supabaseUser } = useSupabase();
+  const [currentUser, setCurrentUser] = useState<Profile | null>(null);
+  const [lists, setLists] = useState<List[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [roadmapIdeas, setRoadmapIdeas] = useState<RoadmapIdea[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Trigger update notification whenever data changes
-  const triggerUpdate = () => {
-    setLastUpdate(Date.now());
-  };
-
-  const login = (email: string, name: string) => {
-    let user = appData.users.find(u => u.email === email);
-    
-    if (!user) {
-      user = {
-        id: generateId(),
-        name,
-        email,
-        color: PRESET_COLORS[appData.users.length % PRESET_COLORS.length],
-        lists: []
-      };
-      setAppData(prev => ({
-        ...prev,
-        users: [...prev.users, user!]
-      }));
+  // Load user profile when authenticated
+  useEffect(() => {
+    if (supabaseUser) {
+      loadUserProfile(supabaseUser.id);
+    } else {
+      setCurrentUser(null);
+      setLists([]);
+      setProjects([]);
+      setRoadmapIdeas([]);
+      setLoading(false);
     }
+  }, [supabaseUser]);
 
-    setAppData(prev => ({
-      ...prev,
-      currentUser: user!,
-      isAuthenticated: true
-    }));
-    triggerUpdate();
+  // Load user data when profile is set
+  useEffect(() => {
+    if (currentUser) {
+      refreshData();
+    }
+  }, [currentUser]);
+
+  const loadUserProfile = async (userId: string) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+      setCurrentUser(profile);
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    }
   };
 
-  const logout = () => {
-    setAppData(prev => ({
-      ...prev,
-      currentUser: null,
-      isAuthenticated: false
-    }));
-    triggerUpdate();
+  const refreshData = async () => {
+    if (!currentUser) return;
+    
+    setLoading(true);
+    try {
+      await Promise.all([
+        loadLists(),
+        loadProjects(), 
+        loadRoadmapIdeas()
+      ]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const createProject = (name: string, description: string, assignedUserIds: string[], color?: string) => {
-    const newProject: Project = {
-      id: generateId(),
-      name,
-      description,
-      color: color || PRESET_COLORS[appData.projects.length % PRESET_COLORS.length],
-      createdBy: appData.currentUser!.id,
-      assignedUsers: assignedUserIds,
-      createdAt: new Date()
-    };
+  const loadLists = async () => {
+    if (!currentUser) return;
 
-    // Create project lists for each assigned user
-    const updatedUsers = appData.users.map(user => {
-      if (assignedUserIds.includes(user.id)) {
-        const projectList: List = {
-          id: generateId(),
+    try {
+      const { data, error } = await supabase
+        .from('lists')
+        .select(`
+          *,
+          tasks (*)
+        `)
+        .eq('user_id', currentUser.id)
+        .order('position', { ascending: true });
+
+      if (error) throw error;
+      setLists(data || []);
+    } catch (error) {
+      console.error('Error loading lists:', error);
+    }
+  };
+
+  const loadProjects = async () => {
+    if (!currentUser) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .or(`created_by.eq.${currentUser.id},id.in.(${await getProjectMembershipIds()})`);
+
+      if (error) throw error;
+      setProjects(data || []);
+    } catch (error) {
+      console.error('Error loading projects:', error);
+    }
+  };
+
+  const getProjectMembershipIds = async () => {
+    if (!currentUser) return '';
+    
+    const { data, error } = await supabase
+      .from('project_members')
+      .select('project_id')
+      .eq('user_id', currentUser.id);
+    
+    if (error || !data) return '';
+    return data.map(pm => pm.project_id).join(',');
+  };
+
+  const loadRoadmapIdeas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('roadmap_ideas')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setRoadmapIdeas(data || []);
+    } catch (error) {
+      console.error('Error loading roadmap ideas:', error);
+    }
+  };
+
+  // Auth functions
+  const login = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw error;
+  };
+
+  const signup = async (email: string, password: string, name: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+        },
+      },
+    });
+    if (error) throw error;
+    
+    // Profile will be created automatically via database trigger
+  };
+
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
+
+  // Project functions
+  const createProject = async (name: string, description: string, assignedUserIds: string[], color?: string) => {
+    if (!currentUser) throw new Error('Not authenticated');
+
+    try {
+      const projectColor = color || PRESET_COLORS[projects.length % PRESET_COLORS.length];
+      
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .insert({
+          name,
+          description,
+          color: projectColor,
+          created_by: currentUser.id,
+        })
+        .select()
+        .single();
+
+      if (projectError) throw projectError;
+
+      // Add project members
+      if (assignedUserIds.length > 0) {
+        const { error: membersError } = await supabase
+          .from('project_members')
+          .insert(
+            assignedUserIds.map(userId => ({
+              project_id: project.id,
+              user_id: userId,
+            }))
+          );
+
+        if (membersError) throw membersError;
+      }
+
+      // Create project list for creator
+      await supabase
+        .from('lists')
+        .insert({
           title: name,
           strategy: '',
-          tasks: [],
           type: 'project',
-          projectId: newProject.id,
-          userId: user.id,
-          color: newProject.color
-        };
-        return {
-          ...user,
-          lists: [...user.lists, projectList]
-        };
-      }
-      return user;
-    });
+          project_id: project.id,
+          user_id: currentUser.id,
+          color: projectColor,
+          position: lists.length,
+        });
 
-    setAppData(prev => ({
-      ...prev,
-      projects: [...prev.projects, newProject],
-      users: updatedUsers,
-      currentUser: updatedUsers.find(u => u.id === appData.currentUser!.id) || appData.currentUser
-    }));
-    triggerUpdate();
-  };
-
-  const updateProject = (projectId: string, updates: Partial<Project>) => {
-    const oldProject = appData.projects.find(p => p.id === projectId);
-    if (!oldProject) return;
-
-    // Handle user assignment changes
-    if (updates.assignedUsers) {
-      const oldUsers = oldProject.assignedUsers;
-      const newUsers = updates.assignedUsers;
-      
-      // Remove project lists from users who are no longer assigned
-      const removedUsers = oldUsers.filter(userId => !newUsers.includes(userId));
-      // Add project lists to newly assigned users
-      const addedUsers = newUsers.filter(userId => !oldUsers.includes(userId));
-      
-      const updatedUsers = appData.users.map(user => {
-        if (removedUsers.includes(user.id)) {
-          return {
-            ...user,
-            lists: user.lists.filter(list => list.projectId !== projectId)
-          };
-        }
-        if (addedUsers.includes(user.id)) {
-          const projectList: List = {
-            id: generateId(),
-            title: updates.name || oldProject.name,
-            strategy: '',
-            tasks: [],
-            type: 'project',
-            projectId: projectId,
-            userId: user.id,
-            color: oldProject.color
-          };
-          return {
-            ...user,
-            lists: [...user.lists, projectList]
-          };
-        }
-        return user;
-      });
-
-      setAppData(prev => ({
-        ...prev,
-        projects: prev.projects.map(p => 
-          p.id === projectId ? { ...p, ...updates } : p
-        ),
-        users: updatedUsers,
-        currentUser: updatedUsers.find(u => u.id === appData.currentUser!.id)!
-      }));
-    } else {
-      setAppData(prev => ({
-        ...prev,
-        projects: prev.projects.map(p => 
-          p.id === projectId ? { ...p, ...updates } : p
-        )
-      }));
-      triggerUpdate();
+      await refreshData();
+    } catch (error) {
+      console.error('Error creating project:', error);
+      throw error;
     }
   };
 
-  const deleteProject = (projectId: string) => {
-    // Remove project lists from all users
-    const updatedUsers = appData.users.map(user => ({
-      ...user,
-      lists: user.lists.filter(list => list.projectId !== projectId)
-    }));
+  const updateProject = async (projectId: string, updates: Partial<Project>) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update(updates)
+        .eq('id', projectId);
 
-    setAppData(prev => ({
-      ...prev,
-      projects: prev.projects.filter(p => p.id !== projectId),
-      users: updatedUsers
-    }));
-    triggerUpdate();
+      if (error) throw error;
+      await refreshData();
+    } catch (error) {
+      console.error('Error updating project:', error);
+      throw error;
+    }
   };
 
-  const createList = (title: string, type: 'personal' | 'project', projectId?: string) => {
-    if (!appData.currentUser) return;
+  const deleteProject = async (projectId: string) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
 
-    const newList: List = {
-      id: generateId(),
-      title,
-      strategy: '',
-      tasks: [],
-      type,
-      projectId,
-      userId: appData.currentUser.id,
-      color: type === 'project' ? appData.projects.find(p => p.id === projectId)?.color : undefined
-    };
-
-    const updatedUsers = appData.users.map(user => 
-      user.id === appData.currentUser!.id 
-        ? { ...user, lists: [...user.lists, newList] }
-        : user
-    );
-
-    setAppData(prev => ({
-      ...prev,
-      users: updatedUsers,
-      currentUser: updatedUsers.find(u => u.id === appData.currentUser!.id)!
-    }));
-    triggerUpdate();
+      if (error) throw error;
+      await refreshData();
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      throw error;
+    }
   };
 
-  const updateList = (listId: string, updates: Partial<List>) => {
-    const updatedUsers = appData.users.map(user => ({
-      ...user,
-      lists: user.lists.map(list => {
-        if (list.id === listId) {
-          return { ...list, ...updates };
-        }
-        // If it's a project list, sync strategy across all users
-        if (list.projectId && updates.strategy && list.projectId === user.lists.find(l => l.id === listId)?.projectId) {
-          return { ...list, strategy: updates.strategy };
-        }
-        return list;
-      })
-    }));
+  // List functions
+  const createList = async (title: string, type: 'personal' | 'project', projectId?: string) => {
+    if (!currentUser) throw new Error('Not authenticated');
 
-    setAppData(prev => ({
-      ...prev,
-      users: updatedUsers,
-      currentUser: updatedUsers.find(u => u.id === appData.currentUser!.id)!
-    }));
-    triggerUpdate();
+    try {
+      const projectColor = projectId ? projects.find(p => p.id === projectId)?.color : undefined;
+      
+      const { error } = await supabase
+        .from('lists')
+        .insert({
+          title,
+          strategy: '',
+          type,
+          project_id: projectId,
+          user_id: currentUser.id,
+          color: projectColor,
+          position: lists.length,
+        });
+
+      if (error) throw error;
+      await loadLists();
+    } catch (error) {
+      console.error('Error creating list:', error);
+      throw error;
+    }
   };
 
-  const deleteList = (listId: string) => {
-    const updatedUsers = appData.users.map(user => ({
-      ...user,
-      lists: user.lists.filter(list => list.id !== listId)
-    }));
+  const updateList = async (listId: string, updates: Partial<List>) => {
+    try {
+      const { error } = await supabase
+        .from('lists')
+        .update(updates)
+        .eq('id', listId);
 
-    setAppData(prev => ({
-      ...prev,
-      users: updatedUsers,
-      currentUser: updatedUsers.find(u => u.id === appData.currentUser!.id)!
-    }));
-    triggerUpdate();
+      if (error) throw error;
+      await loadLists();
+    } catch (error) {
+      console.error('Error updating list:', error);
+      throw error;
+    }
   };
 
-  const addTaskToList = (listId: string, taskData: Omit<Task, 'id' | 'createdAt'>) => {
-    const newTask: Task = {
-      ...taskData,
-      id: generateId(),
-      tag: generateUniqueTag(),
-      createdAt: new Date()
-    };
+  const deleteList = async (listId: string) => {
+    try {
+      const { error } = await supabase
+        .from('lists')
+        .delete()
+        .eq('id', listId);
 
-    const updatedUsers = appData.users.map(user => ({
-      ...user,
-      lists: user.lists.map(list => {
-        if (list.id === listId) {
-          return { ...list, tasks: [...list.tasks, newTask] };
-        }
-        // Sync project tasks across all users
-        if (list.projectId && list.projectId === user.lists.find(l => l.id === listId)?.projectId) {
-          return { ...list, tasks: [...list.tasks, newTask] };
-        }
-        return list;
-      })
-    }));
-
-    setAppData(prev => ({
-      ...prev,
-      users: updatedUsers,
-      currentUser: updatedUsers.find(u => u.id === appData.currentUser!.id)!
-    }));
-    triggerUpdate();
+      if (error) throw error;
+      await loadLists();
+    } catch (error) {
+      console.error('Error deleting list:', error);
+      throw error;
+    }
   };
 
-  const updateTask = (listId: string, taskId: string, updates: Partial<Task>) => {
-    const updatedUsers = appData.users.map(user => ({
-      ...user,
-      lists: user.lists.map(list => {
-        const shouldUpdate = list.id === listId || 
-          (list.projectId && list.projectId === user.lists.find(l => l.id === listId)?.projectId);
-        
-        if (shouldUpdate) {
-          return {
-            ...list,
-            tasks: list.tasks.map(task => 
-              task.id === taskId ? { ...task, ...updates } : task
-            )
-          };
-        }
-        return list;
-      })
-    }));
+  const reorderLists = async (userId: string, listIds: string[]) => {
+    try {
+      const updates = listIds.map((listId, index) => ({
+        id: listId,
+        position: index,
+      }));
 
-    setAppData(prev => ({
-      ...prev,
-      users: updatedUsers,
-      currentUser: updatedUsers.find(u => u.id === appData.currentUser!.id)!
-    }));
-    triggerUpdate();
+      for (const update of updates) {
+        await supabase
+          .from('lists')
+          .update({ position: update.position })
+          .eq('id', update.id);
+      }
+
+      await loadLists();
+    } catch (error) {
+      console.error('Error reordering lists:', error);
+      throw error;
+    }
   };
 
-  const deleteTask = (listId: string, taskId: string) => {
-    const updatedUsers = appData.users.map(user => ({
-      ...user,
-      lists: user.lists.map(list => {
-        const shouldUpdate = list.id === listId || 
-          (list.projectId && list.projectId === user.lists.find(l => l.id === listId)?.projectId);
-        
-        if (shouldUpdate) {
-          return {
-            ...list,
-            tasks: list.tasks.filter(task => task.id !== taskId)
-          };
-        }
-        return list;
-      })
-    }));
+  // Task functions
+  const addTaskToList = async (listId: string, taskData: Omit<Task, 'id' | 'created_at'>) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .insert({
+          ...taskData,
+          tag: generateUniqueTag(),
+          list_id: listId,
+        });
 
-    setAppData(prev => ({
-      ...prev,
-      users: updatedUsers,
-      currentUser: updatedUsers.find(u => u.id === appData.currentUser!.id)!
-    }));
-    triggerUpdate();
+      if (error) throw error;
+      await loadLists();
+    } catch (error) {
+      console.error('Error adding task:', error);
+      throw error;
+    }
   };
 
-  const moveTask = (taskId: string, sourceListId: string, targetListId: string) => {
+  const updateTask = async (listId: string, taskId: string, updates: Partial<Task>) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update(updates)
+        .eq('id', taskId);
+
+      if (error) throw error;
+      await loadLists();
+    } catch (error) {
+      console.error('Error updating task:', error);
+      throw error;
+    }
+  };
+
+  const deleteTask = async (listId: string, taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+
+      if (error) throw error;
+      await loadLists();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      throw error;
+    }
+  };
+
+  const moveTask = async (taskId: string, sourceListId: string, targetListId: string) => {
     if (sourceListId === targetListId) return;
 
-    let taskToMove: Task | null = null;
-    
-    // Find and remove the task from source
-    const usersAfterRemoval = appData.users.map(user => ({
-      ...user,
-      lists: user.lists.map(list => {
-        const shouldRemove = list.id === sourceListId || 
-          (list.projectId && list.projectId === user.lists.find(l => l.id === sourceListId)?.projectId);
-        
-        if (shouldRemove) {
-          const task = list.tasks.find(t => t.id === taskId);
-          if (task && !taskToMove) taskToMove = task;
-          return {
-            ...list,
-            tasks: list.tasks.filter(t => t.id !== taskId)
-          };
-        }
-        return list;
-      })
-    }));
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ list_id: targetListId })
+        .eq('id', taskId);
 
-    if (!taskToMove) return;
-
-    // Add task to target
-    const finalUsers = usersAfterRemoval.map(user => ({
-      ...user,
-      lists: user.lists.map(list => {
-        const shouldAdd = list.id === targetListId || 
-          (list.projectId && list.projectId === user.lists.find(l => l.id === targetListId)?.projectId);
-        
-        if (shouldAdd) {
-          return {
-            ...list,
-            tasks: [...list.tasks, taskToMove!]
-          };
-        }
-        return list;
-      })
-    }));
-
-    setAppData(prev => ({
-      ...prev,
-      users: finalUsers,
-      currentUser: finalUsers.find(u => u.id === appData.currentUser!.id)!
-    }));
-    triggerUpdate();
+      if (error) throw error;
+      await loadLists();
+    } catch (error) {
+      console.error('Error moving task:', error);
+      throw error;
+    }
   };
 
-  const reorderLists = (userId: string, listIds: string[]) => {
-    const updatedUsers = appData.users.map(user => {
-      if (user.id === userId) {
-        const reorderedLists = listIds.map(listId => 
-          user.lists.find(list => list.id === listId)!
-        ).filter(Boolean);
-        return { ...user, lists: reorderedLists };
-      }
-      return user;
-    });
+  // Roadmap functions
+  const addRoadmapIdea = async (ideaData: Omit<RoadmapIdea, 'id' | 'created_by' | 'created_at' | 'updated_at'>) => {
+    if (!currentUser) throw new Error('Not authenticated');
 
-    setAppData(prev => ({
-      ...prev,
-      users: updatedUsers,
-      currentUser: updatedUsers.find(u => u.id === appData.currentUser!.id)!
-    }));
-    triggerUpdate();
+    try {
+      const { error } = await supabase
+        .from('roadmap_ideas')
+        .insert({
+          ...ideaData,
+          created_by: currentUser.id,
+        });
+
+      if (error) throw error;
+      await loadRoadmapIdeas();
+    } catch (error) {
+      console.error('Error adding roadmap idea:', error);
+      throw error;
+    }
   };
 
-  const reorderProjectLists = (projectId: string, listIds: string[]) => {
-    // For project lists, we need to maintain the same order across all users
-    const updatedUsers = appData.users.map(user => {
-      const userProjectLists = user.lists.filter(list => list.projectId === projectId);
-      const userOtherLists = user.lists.filter(list => list.projectId !== projectId);
-      
-      if (userProjectLists.length > 0) {
-        const reorderedProjectLists = listIds.map(listId => 
-          userProjectLists.find(list => list.id === listId)
-        ).filter(Boolean);
-        
-        return {
-          ...user,
-          lists: [...userOtherLists, ...reorderedProjectLists]
-        };
-      }
-      return user;
-    });
+  const updateRoadmapIdea = async (ideaId: string, updates: Partial<RoadmapIdea>) => {
+    try {
+      const { error } = await supabase
+        .from('roadmap_ideas')
+        .update(updates)
+        .eq('id', ideaId);
 
-    setAppData(prev => ({
-      ...prev,
-      users: updatedUsers,
-      currentUser: updatedUsers.find(u => u.id === appData.currentUser!.id)!
-    }));
-    triggerUpdate();
+      if (error) throw error;
+      await loadRoadmapIdeas();
+    } catch (error) {
+      console.error('Error updating roadmap idea:', error);
+      throw error;
+    }
   };
 
+  const deleteRoadmapIdea = async (ideaId: string) => {
+    try {
+      const { error } = await supabase
+        .from('roadmap_ideas')
+        .delete()
+        .eq('id', ideaId);
+
+      if (error) throw error;
+      await loadRoadmapIdeas();
+    } catch (error) {
+      console.error('Error deleting roadmap idea:', error);
+      throw error;
+    }
+  };
+
+  // Utility functions
   const getProjectLists = (projectId: string): List[] => {
-    const projectLists: List[] = [];
-    appData.users.forEach(user => {
-      const userProjectLists = user.lists.filter(list => list.projectId === projectId);
-      projectLists.push(...userProjectLists);
-    });
-    return projectLists;
+    return lists.filter(list => list.project_id === projectId);
   };
 
-  const getUsersInProject = (projectId: string): User[] => {
-    const project = appData.projects.find(p => p.id === projectId);
-    if (!project) return [];
-    return appData.users.filter(user => project.assignedUsers.includes(user.id));
-  };
-
-  const addRoadmapIdea = (ideaData: Omit<RoadmapIdea, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>) => {
-    if (!appData.currentUser) return;
-
-    const newIdea: RoadmapIdea = {
-      ...ideaData,
-      id: generateId(),
-      createdBy: appData.currentUser.id,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    setAppData(prev => ({
-      ...prev,
-      roadmapIdeas: [...prev.roadmapIdeas, newIdea]
-    }));
-    triggerUpdate();
-  };
-
-  const updateRoadmapIdea = (ideaId: string, updates: Partial<RoadmapIdea>) => {
-    setAppData(prev => ({
-      ...prev,
-      roadmapIdeas: prev.roadmapIdeas.map(idea =>
-        idea.id === ideaId
-          ? { ...idea, ...updates, updatedAt: new Date() }
-          : idea
-      )
-    }));
-    triggerUpdate();
-  };
-
-  const deleteRoadmapIdea = (ideaId: string) => {
-    setAppData(prev => ({
-      ...prev,
-      roadmapIdeas: prev.roadmapIdeas.filter(idea => idea.id !== ideaId)
-    }));
-    triggerUpdate();
+  const getUsersInProject = (projectId: string): Profile[] => {
+    // This would need a separate query to get project members
+    // For now, return empty array - can be implemented if needed
+    return [];
   };
 
   const contextValue: AppContextType = {
-    ...appData,
-    lastUpdate,
+    currentUser,
+    isAuthenticated: !!supabaseUser,
+    lists,
+    projects,
+    roadmapIdeas,
+    loading,
+    
     login,
+    signup,
     logout,
+    
     createProject,
     updateProject,
     deleteProject,
+    
     createList,
     updateList,
     deleteList,
+    reorderLists,
+    
     addTaskToList,
     updateTask,
     deleteTask,
     moveTask,
-    getProjectLists,
-    getUsersInProject,
-    reorderLists,
-    reorderProjectLists,
+    
     addRoadmapIdea,
     updateRoadmapIdea,
-    deleteRoadmapIdea
+    deleteRoadmapIdea,
+    
+    getProjectLists,
+    getUsersInProject,
+    refreshData,
   };
 
   return (
