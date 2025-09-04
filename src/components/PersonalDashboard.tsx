@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Target, Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Lock } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ListColumn } from './ListColumn';
@@ -7,7 +7,7 @@ import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
 
 export function PersonalDashboard() {
-  const { currentUser, createList, reorderLists, users, getUsersInProject, lastUpdate } = useApp();
+  const { currentUser, createList, reorderLists, lists, getUsersInProject } = useApp();
   const { t } = useLanguage();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -22,37 +22,14 @@ export function PersonalDashboard() {
 
   if (!currentUser) return null;
 
-  // Force re-render when data updates
-  useEffect(() => {
-    // This effect will run whenever lastUpdate changes, forcing a re-render
-  }, [lastUpdate]);
-
-  const personalLists = currentUser.lists.filter(list => list.type === 'personal');
+  // Filter personal lists from the global lists array
+  const personalLists = lists.filter(list => list.type === 'personal');
   
-  // Group project lists by project and create consolidated views
-  const projectListsGrouped = currentUser.lists
-    .filter(list => list.type === 'project')
-    .reduce((acc, list) => {
-      if (!list.projectId) return acc;
-      
-      if (!acc[list.projectId]) {
-        // Get all tasks from all lists in this project assigned to current user
-        const allProjectTasks = users
-          .flatMap(user => user.lists)
-          .filter(l => l.projectId === list.projectId)
-          .flatMap(l => l.tasks)
-          .filter(task => task.assignedTo === currentUser.id);
-        
-        acc[list.projectId] = {
-          ...list,
-          tasks: allProjectTasks
-        };
-      }
-      return acc;
-    }, {} as Record<string, List>);
+  // Filter project lists and group by project
+  const projectLists = lists.filter(list => list.type === 'project');
   
-  const consolidatedProjectLists = Object.values(projectListsGrouped);
-  const allPersonalLists = [...personalLists, ...consolidatedProjectLists];
+  // Combine personal and project lists
+  const allPersonalLists = [...personalLists, ...projectLists];
 
   const handleCreateList = (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +83,7 @@ export function PersonalDashboard() {
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 isPersonalDashboard={true}
-                projectUsers={list.type === 'project' && list.projectId ? getUsersInProject(list.projectId) : undefined}
+                projectUsers={list.type === 'project' && list.project_id ? getUsersInProject(list.project_id) : undefined}
               />
             </div>
           ))}
