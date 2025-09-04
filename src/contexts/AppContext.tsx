@@ -49,7 +49,7 @@ interface Task {
   position: number;
   created_at: string;
   updated_at: string;
-  dueDate?: Date; // For compatibility
+  dueDate?: Date;
 }
 
 interface RoadmapIdea {
@@ -71,32 +71,27 @@ interface AppContextType {
   loading: boolean;
   isAuthenticated: boolean;
   
-  // Project functions
   createProject: (name: string, description: string, assignedUserIds: string[], color?: string) => Promise<void>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   getProjectLists: (projectId: string) => List[];
   getUsersInProject: (projectId: string) => User[];
   
-  // List functions
   createList: (title: string, type: 'personal' | 'project', projectId?: string) => Promise<void>;
   updateList: (id: string, updates: Partial<List>) => Promise<void>;
   deleteList: (id: string) => Promise<void>;
   reorderLists: (userId: string, listIds: string[]) => Promise<void>;
   reorderProjectLists: (projectId: string, listIds: string[]) => Promise<void>;
   
-  // Task functions
   addTaskToList: (listId: string, taskData: any) => Promise<void>;
   updateTask: (listId: string, taskId: string, updates: any) => Promise<void>;
   deleteTask: (listId: string, taskId: string) => Promise<void>;
   moveTask: (taskId: string, sourceListId: string, targetListId: string) => Promise<void>;
   
-  // Roadmap functions
   addRoadmapIdea: (ideaData: any) => Promise<void>;
   updateRoadmapIdea: (id: string, updates: any) => Promise<void>;
   deleteRoadmapIdea: (id: string) => Promise<void>;
   
-  // Data refresh
   refreshData: () => Promise<void>;
 }
 
@@ -115,7 +110,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [roadmapIdeas, setRoadmapIdeas] = useState<RoadmapIdea[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Initialize user profile and load data
   useEffect(() => {
     if (user) {
       initializeUserAndLoadData();
@@ -134,14 +128,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       
-      // Check if profile exists
       let { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      // Create profile if it doesn't exist
       if (profileError && profileError.code === 'PGRST116') {
         const newProfile = {
           id: user.id,
@@ -200,7 +192,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     try {
-      // Get personal lists
       const { data: personalLists, error: personalError } = await supabase
         .from('lists')
         .select(`
@@ -213,7 +204,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (personalError) throw personalError;
 
-      // Get project memberships
       const { data: projectMemberships, error: memberError } = await supabase
         .from('project_members')
         .select('project_id')
@@ -224,14 +214,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!memberError && projectMemberships && projectMemberships.length > 0) {
         const projectIds = projectMemberships.map(m => m.project_id);
         
-        // Get projects user is member of
         const { data: userProjects, error: projectError } = await supabase
           .from('projects')
           .select('*')
           .in('id', projectIds);
 
         if (!projectError && userProjects) {
-          // For each project, create consolidated view
           for (const project of userProjects) {
             const { data: projectLists, error: listsError } = await supabase
               .from('lists')
@@ -242,7 +230,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               .eq('project_id', project.id);
 
             if (!listsError && projectLists) {
-              // Get tasks assigned to current user
               const userAssignedTasks = projectLists
                 .flatMap(list => (list.tasks || []).map(task => ({
                   ...task,
@@ -250,7 +237,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 })))
                 .filter(task => task.assigned_to === user.id);
 
-              // Create consolidated project view
               const consolidatedList: List = {
                 id: `project-${project.id}`,
                 title: project.name,
@@ -271,7 +257,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Convert personal lists tasks
       const personalListsWithDates = (personalLists || []).map(list => ({
         ...list,
         tasks: (list.tasks || []).map(task => ({
@@ -300,7 +285,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Project functions
   const createProject = async (name: string, description: string, assignedUserIds: string[], color?: string) => {
     if (!currentUser) throw new Error('Not authenticated');
 
@@ -320,7 +304,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (projectError) throw projectError;
 
-      // Add project members
       const allMemberIds = [currentUser.id, ...assignedUserIds];
       const uniqueMemberIds = [...new Set(allMemberIds)];
       
@@ -375,33 +358,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const getProjectLists = (projectId: string): List[] => {
-    // Return actual project lists (not consolidated views)
     return lists.filter(list => list.project_id === projectId && !list.id.startsWith('project-'));
   };
 
   const getUsersInProject = (projectId: string): User[] => {
-    // Simplified - return empty array for now
-    // In full implementation, this would fetch project members
     return [];
   };
 
-  // List functions
   const createList = async (title: string, type: 'personal' | 'project', projectId?: string) => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      console.error('No current user');
+      return;
+    }
 
     try {
-      const { error } = await supabase
-        .from('lists')
-        .insert({
-          title,
-          strategy: '',
-          type,
-          project_id: projectId || null,
-          user_id: currentUser.id,
-          position: lists.length,
-        });
+      console.log('Creating list:', { title, type, projectId });
 
-      if (error) throw error;
+      const listData: any = {
+        title,
+        strategy: '',
+        type,
+        user_id: currentUser.id,
+        position: lists.length,
+      };
+
+      if (type === 'project' && projectId) {
+        listData.project_id = projectId;
+      } else if (type === 'personal') {
+        listData.project_id = null;
+      }
+
+      console.log('List data to insert:', listData);
+
+      const { data, error } = await supabase
+        .from('lists')
+        .insert(listData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
+      console.log('Created list:', data);
       await loadLists();
     } catch (error) {
       console.error('Error creating list:', error);
@@ -440,25 +440,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const reorderLists = async (userId: string, listIds: string[]) => {
-    // Simplified implementation
     console.log('Reorder lists:', listIds);
   };
 
   const reorderProjectLists = async (projectId: string, listIds: string[]) => {
-    // Simplified implementation
     console.log('Reorder project lists:', listIds);
   };
 
-  // Task functions
   const addTaskToList = async (listId: string, taskData: any) => {
     try {
       let targetListId = listId;
       
-      // Handle consolidated project views
       if (listId.startsWith('project-')) {
         const projectId = listId.replace('project-', '');
         
-        // Find existing list or create new one
         const { data: projectLists, error: listsError } = await supabase
           .from('lists')
           .select('*')
@@ -470,7 +465,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (projectLists && projectLists.length > 0) {
           targetListId = projectLists[0].id;
         } else {
-          // Create new list
           const project = projects.find(p => p.id === projectId);
           const { data: newList, error: createError } = await supabase
             .from('lists')
@@ -551,7 +545,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Roadmap functions
   const addRoadmapIdea = async (ideaData: any) => {
     if (!currentUser) return;
 
