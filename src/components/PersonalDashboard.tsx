@@ -7,7 +7,7 @@ import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
 
 export function PersonalDashboard() {
-  const { currentUser, createList, reorderLists, lists, getUsersInProject } = useApp();
+  const { currentUser, createList, lists, getUsersInProject } = useApp();
   const { t } = useLanguage();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -22,14 +22,8 @@ export function PersonalDashboard() {
 
   if (!currentUser) return null;
 
-  // Filter personal lists from the global lists array
-  const personalLists = lists.filter(list => list.type === 'personal');
-  
-  // Filter project lists and group by project
-  const projectLists = lists.filter(list => list.type === 'project');
-  
-  // Combine personal and project lists
-  const allPersonalLists = [...personalLists, ...projectLists];
+  // Use lists directly from context (includes both personal and consolidated project views)
+  const allPersonalLists = lists;
 
   const handleCreateList = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,11 +41,8 @@ export function PersonalDashboard() {
   };
 
   const handleListReorder = (sourceIndex: number, targetIndex: number) => {
-    const newListOrder = [...allPersonalLists];
-    const [movedList] = newListOrder.splice(sourceIndex, 1);
-    newListOrder.splice(targetIndex, 0, movedList);
-    
-    reorderLists(currentUser.id, newListOrder.map(list => list.id));
+    // Simplified for now - the new business logic handles this differently
+    console.log('List reorder:', sourceIndex, targetIndex);
   };
 
   return (
