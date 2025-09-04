@@ -2,9 +2,9 @@
   # Initial Schema for Team Kanban Dashboard
 
   1. New Tables
-    - `users` - User profiles and authentication
+    - `profiles` - User profiles that reference auth.users
     - `projects` - Team projects
-    - `project_members` - Many-to-many relationship between users and projects
+    - `project_members` - Many-to-many relationship between profiles and projects
     - `lists` - Kanban lists (personal and project)
     - `tasks` - Individual tasks within lists
     - `roadmap_ideas` - Development roadmap ideas
@@ -13,16 +13,29 @@
     - Enable RLS on all tables
     - Add policies for authenticated users
     - Ensure users can only access their own data and shared projects
+
+  3. Functions
+    - Add trigger function for updating `updated_at` timestamps
+    - Add trigger for automatic profile creation on user signup
 */
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table
-CREATE TABLE IF NOT EXISTS users (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- Create updated_at trigger function
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Profiles table (references auth.users)
+CREATE TABLE IF NOT EXISTS profiles (
+  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name text NOT NULL,
-  email text UNIQUE NOT NULL,
+  email text NOT NULL,
   color text NOT NULL DEFAULT '#3B82F6',
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
@@ -34,7 +47,7 @@ CREATE TABLE IF NOT EXISTS projects (
   name text NOT NULL,
   description text DEFAULT '',
   color text NOT NULL DEFAULT '#3B82F6',
-  created_by uuid REFERENCES users(id) ON DELETE CASCADE,
+  created_by uuid REFERENCES profiles(id) ON DELETE CASCADE,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -43,7 +56,7 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS project_members (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   project_id uuid REFERENCES projects(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES profiles(id) ON DELETE CASCADE,
   created_at timestamptz DEFAULT now(),
   UNIQUE(project_id, user_id)
 );
@@ -55,7 +68,7 @@ CREATE TABLE IF NOT EXISTS lists (
   strategy text DEFAULT '',
   type text NOT NULL CHECK (type IN ('personal', 'project')),
   project_id uuid REFERENCES projects(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   color text,
   position integer DEFAULT 0,
   created_at timestamptz DEFAULT now(),
@@ -71,7 +84,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   priority text NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
   completed boolean DEFAULT false,
   list_id uuid REFERENCES lists(id) ON DELETE CASCADE,
-  assigned_to uuid REFERENCES users(id) ON DELETE SET NULL,
+  assigned_to uuid REFERENCES profiles(id) ON DELETE SET NULL,
   due_date timestamptz,
   position integer DEFAULT 0,
   created_at timestamptz DEFAULT now(),
@@ -85,23 +98,23 @@ CREATE TABLE IF NOT EXISTS roadmap_ideas (
   description text NOT NULL,
   category text NOT NULL CHECK (category IN ('new-feature', 'improvement', 'next-steps', 'bug')),
   image_url text,
-  created_by uuid REFERENCES users(id) ON DELETE CASCADE,
+  created_by uuid REFERENCES profiles(id) ON DELETE CASCADE,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
 
 -- Enable Row Level Security
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE roadmap_ideas ENABLE ROW LEVEL SECURITY;
 
--- Users policies
-CREATE POLICY "Users can read all users" ON users FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Users can update own profile" ON users FOR UPDATE TO authenticated USING (auth.uid() = id);
-CREATE POLICY "Users can insert own profile" ON users FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+-- Profiles policies
+CREATE POLICY "Users can read all profiles" ON profiles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE TO authenticated USING (auth.uid() = id);
+CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
 
 -- Projects policies
 CREATE POLICY "Users can read projects they're members of" ON projects FOR SELECT TO authenticated 
@@ -197,18 +210,24 @@ CREATE INDEX IF NOT EXISTS idx_tasks_list_id ON tasks(list_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_roadmap_ideas_created_by ON roadmap_ideas(created_by);
 
--- Create updated_at trigger function
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
 -- Add updated_at triggers
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_lists_updated_at BEFORE UPDATE ON lists FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_roadmap_ideas_updated_at BEFORE UPDATE ON roadmap_ideas FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to handle automatic profile creation
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, name, email)
+  VALUES (new.id, new.raw_user_meta_data->>'name', new.email);
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger for automatic profile creation on signup
+CREATE OR REPLACE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
