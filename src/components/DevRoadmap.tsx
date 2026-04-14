@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lightbulb, Plus, CreditCard as Edit3, Trash2, Calendar, X, Tag } from 'lucide-react';
+import { Lightbulb, Plus, CreditCard as Edit3, Trash2, Calendar, X, Tag, LayoutGrid, List } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -170,6 +170,7 @@ export function DevRoadmap() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingIdea, setEditingIdea] = useState<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
   if (!currentUser) return null;
 
@@ -225,13 +226,39 @@ export function DevRoadmap() {
             <p className="text-slate-600 dark:text-slate-300">{t('roadmap.subtitle')}</p>
           </div>
 
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
-          >
-            <Plus className="w-5 h-5" />
-            <span>{t('roadmap.newIdea')}</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('card')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'card'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span>Cards</span>
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                <span>List</span>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+            >
+              <Plus className="w-5 h-5" />
+              <span>{t('roadmap.newIdea')}</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6">
@@ -271,11 +298,10 @@ export function DevRoadmap() {
               {t('roadmap.addFirstIdea')}
             </button>
           </div>
-        ) : (
+        ) : viewMode === 'card' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredIdeas.map(idea => {
               const categoryInfo = getCategoryInfo(idea.category);
-
               return (
                 <div
                   key={idea.id}
@@ -283,20 +309,14 @@ export function DevRoadmap() {
                 >
                   {idea.image_url && (
                     <div className="h-48 bg-slate-200 dark:bg-slate-700 rounded-t-xl overflow-hidden">
-                      <img
-                        src={idea.image_url}
-                        alt={idea.title}
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={idea.image_url} alt={idea.title} className="w-full h-full object-cover" />
                     </div>
                   )}
-
                   <div className="p-6 flex flex-col flex-1">
                     <div className="flex items-start justify-between mb-3">
                       <span className={`px-2.5 py-1 text-xs rounded-full text-white font-medium ${categoryInfo.color}`}>
                         {categoryInfo.label}
                       </span>
-
                       <div className="flex space-x-1">
                         <button
                           onClick={() => setEditingIdea(idea)}
@@ -314,15 +334,10 @@ export function DevRoadmap() {
                         </button>
                       </div>
                     </div>
-
-                    <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">
-                      {idea.title}
-                    </h3>
-
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">{idea.title}</h3>
                     <p className="text-slate-600 dark:text-slate-300 mb-4 line-clamp-3 flex-1 text-sm leading-relaxed">
                       {idea.description}
                     </p>
-
                     <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-3 border-t border-slate-100 dark:border-slate-700">
                       <div className="flex items-center space-x-2">
                         <div
@@ -337,6 +352,62 @@ export function DevRoadmap() {
                         <Calendar className="w-3.5 h-3.5" />
                         <span>{new Date(idea.created_at || '').toLocaleDateString()}</span>
                       </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {filteredIdeas.map(idea => {
+              const categoryInfo = getCategoryInfo(idea.category);
+              return (
+                <div
+                  key={idea.id}
+                  className="bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow flex items-center gap-4 px-5 py-4"
+                >
+                  {idea.image_url && (
+                    <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-slate-200 dark:bg-slate-700">
+                      <img src={idea.image_url} alt={idea.title} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <span className={`px-2.5 py-1 text-xs rounded-full text-white font-medium flex-shrink-0 ${categoryInfo.color}`}>
+                    {categoryInfo.label}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-white truncate">{idea.title}</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{idea.description}</p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5 hidden sm:flex">
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                        style={{ backgroundColor: currentUser.color }}
+                      >
+                        {currentUser.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span>{currentUser.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>{new Date(idea.created_at || '').toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setEditingIdea(idea)}
+                        className="w-8 h-8 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors"
+                        title="Edit idea"
+                      >
+                        <Edit3 className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(idea.id)}
+                        className="w-8 h-8 bg-slate-100 dark:bg-slate-700 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-full flex items-center justify-center transition-colors"
+                        title="Delete idea"
+                      >
+                        <Trash2 className="w-4 h-4 text-slate-400 hover:text-red-600 transition-colors" />
+                      </button>
                     </div>
                   </div>
                 </div>
