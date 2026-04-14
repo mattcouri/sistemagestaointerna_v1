@@ -1,5 +1,5 @@
 import React from 'react';
-import { User as UserIcon, FolderOpen, Monitor, LogOut, Plus, Sun, Moon, Lightbulb, Languages } from 'lucide-react';
+import { User as UserIcon, FolderOpen, Monitor, LogOut, Sun, Moon, Lightbulb, Languages } from 'lucide-react';
 import { useSupabase } from '../hooks/useSupabase';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -8,11 +8,10 @@ import { User } from '../types';
 interface NavigationProps {
   currentView: 'personal' | 'projects' | 'roadmap';
   onViewChange: (view: 'personal' | 'projects' | 'roadmap') => void;
-  onCreateProject: () => void;
   currentUser: User;
 }
 
-export function Navigation({ currentView, onViewChange, onCreateProject, currentUser }: NavigationProps) {
+export function Navigation({ currentView, onViewChange, currentUser }: NavigationProps) {
   const { signOut } = useSupabase();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { language, toggleLanguage, t } = useLanguage();
@@ -78,16 +77,6 @@ export function Navigation({ currentView, onViewChange, onCreateProject, current
         </div>
 
         <div className="flex items-center space-x-3">
-          {(currentView === 'projects' || currentView === 'roadmap') && (
-            <button
-              onClick={currentView === 'projects' ? onCreateProject : () => {}}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{currentView === 'projects' ? t('nav.newProject') : t('nav.newIdea')}</span>
-            </button>
-          )}
-          
           <button
             onClick={toggleLanguage}
             className="text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center space-x-1 bg-slate-100 dark:bg-slate-700/50"

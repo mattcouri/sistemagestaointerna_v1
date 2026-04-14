@@ -24,16 +24,11 @@ export function AuthenticatedApp({ user }: AuthenticatedAppProps) {
     );
   }
 
-  const handleCreateProject = () => {
-    setCurrentView('projects');
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors">
-      <Navigation 
+      <Navigation
         currentView={currentView}
         onViewChange={setCurrentView}
-        onCreateProject={handleCreateProject}
         currentUser={currentUser}
       />
       
