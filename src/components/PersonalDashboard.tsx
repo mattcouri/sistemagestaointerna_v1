@@ -7,7 +7,7 @@ import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
 
 export function PersonalDashboard() {
-  const { currentUser, createList, lists, getUsersInProject } = useApp();
+  const { currentUser, createList, lists, getUsersInProject, allProfiles } = useApp();
   const { t } = useLanguage();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -74,7 +74,7 @@ export function PersonalDashboard() {
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 isPersonalDashboard={true}
-                projectUsers={list.type === 'project' && list.project_id ? getUsersInProject(list.project_id) : undefined}
+                projectUsers={list.type === 'project' && list.project_id ? allProfiles : undefined}
               />
             </div>
           ))}

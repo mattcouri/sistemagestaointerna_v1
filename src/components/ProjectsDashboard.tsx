@@ -8,7 +8,7 @@ import { ProjectView } from './ProjectView';
 import { ProjectTVDashboard } from './ProjectTVDashboard';
 
 export function ProjectsDashboard() {
-  const { projects, currentUser, lists } = useApp();
+  const { projects, currentUser, lists, allProfiles } = useApp();
   const { t } = useLanguage();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -187,7 +187,7 @@ export function ProjectsDashboard() {
         {showCreateModal && (
           <CreateProjectModal
             onClose={() => setShowCreateModal(false)}
-            availableUsers={[]} // Empty for now since we don't have users array
+            availableUsers={allProfiles}
           />
         )}
 
@@ -195,7 +195,7 @@ export function ProjectsDashboard() {
           <EditProjectModal
             project={editingProjectData}
             onClose={() => setEditingProject(null)}
-            availableUsers={[]} // Empty for now since we don't have users array
+            availableUsers={allProfiles}
           />
         )}
       </div>

@@ -52,12 +52,12 @@ export function TaskItem({ task, listId, compact = false, projectUsers, onDragSt
   };
 
   const handleAssignUser = (userId: string) => {
-    updateTask(listId, task.id, { assignedTo: userId || undefined });
+    updateTask(listId, task.id, { assigned_to: userId || null });
     setShowAssigneeDropdown(false);
   };
 
   const priorityClass = getPriorityColor(task.priority);
-  const assignedUser = projectUsers?.find(user => user.id === task.assignedTo);
+  const assignedUser = projectUsers?.find(user => user.id === (task.assigned_to || (task as any).assignedTo));
 
   if (compact) {
     return (

@@ -1,24 +1,31 @@
 export interface Task {
   id: string;
-  tag: string; // Unique tag across the platform
+  tag: string;
   title: string;
   description?: string;
   priority: 'low' | 'medium' | 'high';
   completed: boolean;
-  createdAt: Date;
+  list_id: string;
+  assigned_to?: string;
+  due_date?: string;
   dueDate?: Date;
-  assignedTo?: string; // User ID
+  position: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface List {
   id: string;
   title: string;
-  strategy: string;
+  strategy?: string;
   tasks: Task[];
   type: 'personal' | 'project';
-  projectId?: string;
-  userId: string;
+  project_id?: string;
+  user_id: string;
   color?: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Project {
@@ -26,9 +33,9 @@ export interface Project {
   name: string;
   description: string;
   color: string;
-  createdBy: string;
-  assignedUsers: string[];
-  createdAt: Date;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface User {
@@ -37,7 +44,6 @@ export interface User {
   email: string;
   avatar?: string;
   color: string;
-  lists: List[];
 }
 
 export interface DraggedTask {
@@ -59,8 +65,8 @@ export interface RoadmapIdea {
   title: string;
   description: string;
   category: 'new-feature' | 'improvement' | 'next-steps' | 'bug';
-  imageUrl?: string;
-  createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
+  image_url?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
