@@ -70,6 +70,8 @@ interface AppContextType {
   roadmapIdeas: RoadmapIdea[];
   loading: boolean;
   isAuthenticated: boolean;
+  isGuest: boolean;
+  continueAsGuest: () => void;
   
   createProject: (name: string, description: string, assignedUserIds: string[], color?: string) => Promise<void>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
@@ -102,6 +104,13 @@ const PRESET_COLORS = [
   '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'
 ];
 
+const GUEST_USER: User = {
+  id: 'guest',
+  name: 'Guest User',
+  email: 'guest@demo.local',
+  color: '#10B981',
+};
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user } = useSupabase();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -109,11 +118,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lists, setLists] = useState<List[]>([]);
   const [roadmapIdeas, setRoadmapIdeas] = useState<RoadmapIdea[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(false);
+
+  const continueAsGuest = () => {
+    setIsGuest(true);
+    setCurrentUser(GUEST_USER);
+    setLoading(false);
+  };
 
   useEffect(() => {
     if (user) {
+      setIsGuest(false);
       initializeUserAndLoadData();
-    } else {
+    } else if (!isGuest) {
       setCurrentUser(null);
       setProjects([]);
       setLists([]);
@@ -604,7 +621,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     lists,
     roadmapIdeas,
     loading,
-    isAuthenticated: !!user,
+    isAuthenticated: !!user || isGuest,
+    isGuest,
+    continueAsGuest,
     
     createProject,
     updateProject,

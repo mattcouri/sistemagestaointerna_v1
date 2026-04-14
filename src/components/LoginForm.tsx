@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { LogIn, User, Mail, Lock } from 'lucide-react';
+import { LogIn, User, ArrowRight } from 'lucide-react';
 import { useSupabase } from '../hooks/useSupabase';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useApp } from '../contexts/AppContext';
 
 export function LoginForm() {
   const { signIn, signUp } = useSupabase();
+  const { continueAsGuest } = useApp();
   const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -148,6 +150,23 @@ export function LoginForm() {
           >
             {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
           </button>
+        </div>
+
+        <div className="mt-4">
+          <div className="relative flex items-center">
+            <div className="flex-grow border-t border-slate-200"></div>
+            <span className="flex-shrink mx-3 text-slate-400 text-xs uppercase tracking-wide">or</span>
+            <div className="flex-grow border-t border-slate-200"></div>
+          </div>
+          <button
+            onClick={continueAsGuest}
+            disabled={loading}
+            className="mt-4 w-full flex items-center justify-center gap-2 p-3 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all text-sm font-medium disabled:opacity-50"
+          >
+            <ArrowRight className="w-4 h-4" />
+            Continue as Guest
+          </button>
+          <p className="mt-2 text-center text-xs text-slate-400">No account needed. Data won't be saved.</p>
         </div>
 
         <div className="mt-8 pt-6 border-t border-slate-200">
