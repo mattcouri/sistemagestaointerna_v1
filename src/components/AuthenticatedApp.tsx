@@ -37,9 +37,9 @@ export function AuthenticatedApp({ user }: AuthenticatedAppProps) {
         currentUser={currentUser}
       />
       
-      {currentView === 'personal' && <PersonalDashboard currentUser={currentUser} />}
-      {currentView === 'projects' && <ProjectsDashboard currentUser={currentUser} />}
-      {currentView === 'roadmap' && <DevRoadmap currentUser={currentUser} />}
+      {currentView === 'personal' && <PersonalDashboard />}
+      {currentView === 'projects' && <ProjectsDashboard />}
+      {currentView === 'roadmap' && <DevRoadmap />}
     </div>
   );
 }

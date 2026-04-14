@@ -121,13 +121,13 @@ function now() {
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useSupabase();
+  const { user, loading: authLoading } = useSupabase();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [lists, setLists] = useState<List[]>([]);
   const [roadmapIdeas, setRoadmapIdeas] = useState<RoadmapIdea[]>([]);
   const [allProfiles, setAllProfiles] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
 
   const continueAsGuest = () => {
@@ -137,10 +137,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setLists([]);
     setRoadmapIdeas([]);
     setAllProfiles([GUEST_USER]);
-    setLoading(false);
+    setDataLoading(false);
   };
 
   useEffect(() => {
+    if (authLoading) return;
     if (user) {
       setIsGuest(false);
       initializeUserAndLoadData();
@@ -150,15 +151,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setLists([]);
       setRoadmapIdeas([]);
       setAllProfiles([]);
-      setLoading(false);
+      setDataLoading(false);
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   const initializeUserAndLoadData = async () => {
     if (!user) return;
 
     try {
-      setLoading(true);
+      setDataLoading(true);
 
       let { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -191,7 +192,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error initializing user:', error);
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
   };
 
@@ -701,7 +702,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     lists,
     roadmapIdeas,
     allProfiles,
-    loading,
+    loading: authLoading || dataLoading,
     isAuthenticated: !!user || isGuest,
     isGuest,
     continueAsGuest,
