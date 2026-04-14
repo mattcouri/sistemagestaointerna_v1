@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { FolderOpen, Users, Calendar, Plus, Settings, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { FolderOpen, Users, Calendar, Plus, Settings, CheckCircle, Clock, AlertCircle, UserPlus } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { CreateProjectModal } from './CreateProjectModal';
 import { EditProjectModal } from './EditProjectModal';
 import { ProjectView } from './ProjectView';
 import { ProjectTVDashboard } from './ProjectTVDashboard';
+import { ProjectMembersModal } from './ProjectMembersModal';
 
 export function ProjectsDashboard() {
   const { projects, currentUser, lists, allProfiles } = useApp();
@@ -14,6 +15,7 @@ export function ProjectsDashboard() {
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [showTVDashboard, setShowTVDashboard] = useState(false);
   const [editingProject, setEditingProject] = useState<string | null>(null);
+  const [managingMembersProject, setManagingMembersProject] = useState<string | null>(null);
 
   if (!currentUser) return null;
 
@@ -148,7 +150,17 @@ export function ProjectsDashboard() {
                   style={{ backgroundColor: project.color }}
                 />
                 <div className="p-6" onClick={() => setSelectedProject(project.id)}>
-                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setManagingMembersProject(project.id);
+                      }}
+                      className="w-8 h-8 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors"
+                      title="Manage members"
+                    >
+                      <UserPlus className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -198,6 +210,16 @@ export function ProjectsDashboard() {
             availableUsers={allProfiles}
           />
         )}
+
+        {managingMembersProject && (() => {
+          const proj = projects.find(p => p.id === managingMembersProject);
+          return proj ? (
+            <ProjectMembersModal
+              project={proj}
+              onClose={() => setManagingMembersProject(null)}
+            />
+          ) : null;
+        })()}
       </div>
     </div>
   );

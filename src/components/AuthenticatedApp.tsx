@@ -3,14 +3,15 @@ import { Navigation } from './Navigation';
 import { PersonalDashboard } from './PersonalDashboard';
 import { ProjectsDashboard } from './ProjectsDashboard';
 import { DevRoadmap } from './DevRoadmap';
+import { AdminPanel } from './AdminPanel';
 import { useApp } from '../contexts/AppContext';
 
 interface AuthenticatedAppProps {
-  user: any; // We'll get user from AppContext instead
+  user: any;
 }
 
 export function AuthenticatedApp({ user }: AuthenticatedAppProps) {
-  const [currentView, setCurrentView] = useState<'personal' | 'projects' | 'roadmap'>('personal');
+  const [currentView, setCurrentView] = useState<'personal' | 'projects' | 'roadmap' | 'admin'>('personal');
   const { currentUser, loading } = useApp();
 
   if (loading || !currentUser) {
@@ -31,10 +32,11 @@ export function AuthenticatedApp({ user }: AuthenticatedAppProps) {
         onViewChange={setCurrentView}
         currentUser={currentUser}
       />
-      
+
       {currentView === 'personal' && <PersonalDashboard />}
       {currentView === 'projects' && <ProjectsDashboard />}
       {currentView === 'roadmap' && <DevRoadmap />}
+      {currentView === 'admin' && <AdminPanel />}
     </div>
   );
 }

@@ -44,6 +44,37 @@ export interface User {
   email: string;
   avatar?: string;
   color: string;
+  is_admin?: boolean;
+  organization_id?: string | null;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationMember {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  role: 'owner' | 'member';
+  created_at: string;
+}
+
+export interface ProjectInvitation {
+  id: string;
+  project_id: string;
+  invited_by: string;
+  invited_user_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+  updated_at: string;
+  project?: Project;
+  inviter?: User;
+  invitee?: User;
 }
 
 export interface DraggedTask {

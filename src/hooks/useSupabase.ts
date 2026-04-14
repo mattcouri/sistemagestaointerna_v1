@@ -1,55 +1,41 @@
-import { useState } from 'react';
-
-export interface LocalUser {
-  id: string;
-  email: string;
-  user_metadata: { name: string };
-}
-
-const HARDCODED_USER: LocalUser = {
-  id: 'matt-user-001',
-  email: 'matt@trinitygroup.com.br',
-  user_metadata: { name: 'Matt' },
-};
-
-const HARDCODED_PASSWORD = '4mm@40VP';
-
-const SESSION_KEY = 'local_auth_session';
-
-function getStoredUser(): LocalUser | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as LocalUser;
-  } catch {
-    return null;
-  }
-}
+import { useState, useEffect } from 'react';
+import { User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 
 export function useSupabase() {
-  const [user, setUser] = useState<LocalUser | null>(() => getStoredUser());
-  const [loading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const signIn = async (email: string, password: string) => {
-    if (
-      email.trim().toLowerCase() === HARDCODED_USER.email.toLowerCase() &&
-      password === HARDCODED_PASSWORD
-    ) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(HARDCODED_USER));
-      setUser(HARDCODED_USER);
-      return { data: { user: HARDCODED_USER }, error: null };
-    }
-    return { data: null, error: new Error('Invalid email or password') };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    return { data, error };
   };
 
-  const signUp = async (_email: string, _password: string, _name: string) => {
-    return { data: null, error: new Error('Sign up is not available') };
+  const signUp = async (email: string, password: string, name: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },
+    });
+    return { data, error };
   };
 
   const signOut = async () => {
-    localStorage.removeItem(SESSION_KEY);
-    setUser(null);
-    return { error: null };
+    const { error } = await supabase.auth.signOut();
+    return { error };
   };
 
   return { user, loading, signIn, signUp, signOut };
