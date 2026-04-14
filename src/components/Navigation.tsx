@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User as UserIcon, FolderOpen, LogOut, Sun, Moon, Lightbulb, Languages, Bell, Shield } from 'lucide-react';
-import { useSupabase } from '../hooks/useSupabase';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useApp } from '../contexts/AppContext';
@@ -14,16 +13,11 @@ interface NavigationProps {
 }
 
 export function Navigation({ currentView, onViewChange, currentUser }: NavigationProps) {
-  const { signOut } = useSupabase();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { language, toggleLanguage, t } = useLanguage();
-  const { pendingInvitations } = useApp();
+  const { pendingInvitations, logout } = useApp();
   const [showInvitations, setShowInvitations] = useState(false);
   const invitationsRef = useRef<HTMLDivElement>(null);
-
-  const handleLogout = async () => {
-    await signOut();
-  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -155,7 +149,7 @@ export function Navigation({ currentView, onViewChange, currentUser }: Navigatio
           </button>
 
           <button
-            onClick={handleLogout}
+            onClick={logout}
             className="text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-colors flex items-center space-x-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
           >
             <LogOut className="w-4 h-4" />

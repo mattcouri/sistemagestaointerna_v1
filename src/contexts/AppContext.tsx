@@ -21,6 +21,7 @@ interface AppContextType {
   isAuthenticated: boolean;
   isGuest: boolean;
   continueAsGuest: () => void;
+  logout: () => Promise<void>;
 
   createProject: (name: string, description: string, assignedUserIds: string[], color?: string) => Promise<void>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
@@ -189,6 +190,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshData = async () => {
     if (user) await loadSupabaseData(user.id);
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setIsGuest(false);
+    setCurrentUser(null);
+    setProjects([]);
+    setLists([]);
+    setRoadmapIdeas([]);
+    setAllProfiles([]);
+    setOrganizations([]);
+    setPendingInvitations([]);
   };
 
   const continueAsGuest = () => {
@@ -601,6 +614,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: !!user || isGuest,
     isGuest,
     continueAsGuest,
+    logout,
 
     createProject, updateProject, deleteProject, getProjectLists, getUsersInProject, getProjectMembers,
     createList, updateList, deleteList, reorderLists, reorderProjectLists,
