@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Plus, Target, Lock, FolderOpen, MoreVertical, User } from 'lucide-react';
+import { Plus, Target, Lock, FolderOpen, MoreVertical } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { TaskItem } from './TaskItem';
+import { AddTaskModal } from './AddTaskModal';
 
 interface ListColumnProps {
   list: any; // Using any since List type has mismatches
@@ -15,56 +16,17 @@ interface ListColumnProps {
 }
 
 export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = false, projectUsers, isPersonalDashboard = false }: ListColumnProps) {
-  const { updateList, addTaskToList, deleteList, projects, getProjectLists } = useApp();
+  const { updateList, deleteList, projects, getProjectLists } = useApp();
   const { t } = useLanguage();
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskPriority, setNewTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
-  const [newTaskAssignee, setNewTaskAssignee] = useState<string>('');
-  const [newTaskDueDate, setNewTaskDueDate] = useState<string>('');
-  const [selectedTargetList, setSelectedTargetList] = useState<string>('');
   const [editingStrategy, setEditingStrategy] = useState(false);
   const [strategyText, setStrategyText] = useState(list.strategy || '');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(list.title);
 
-  // Get project info if this is a project list
   const project = list.project_id ? projects.find(p => p.id === list.project_id) : null;
   const projectLists = list.project_id ? getProjectLists(list.project_id) : [];
-  
-  // Set default target list when adding task
-  React.useEffect(() => {
-    if (isAddingTask && list.project_id && !selectedTargetList) {
-      setSelectedTargetList(list.id);
-    }
-  }, [isAddingTask, list.project_id, list.id, selectedTargetList]);
-
-  const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newTaskTitle.trim()) {
-      const targetListId = isPersonalDashboard && list.project_id && selectedTargetList 
-        ? selectedTargetList 
-        : list.id;
-        
-      // Convert date string to ISO format for Supabase
-      const taskData: any = {
-        title: newTaskTitle.trim(),
-        priority: newTaskPriority,
-        completed: false,
-        position: (list.tasks?.length || 0),
-        assigned_to: newTaskAssignee || undefined,
-        due_date: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : undefined
-      };
-
-      addTaskToList(targetListId, taskData);
-      setNewTaskTitle('');
-      setNewTaskAssignee('');
-      setNewTaskDueDate('');
-      setSelectedTargetList('');
-      setIsAddingTask(false);
-    }
-  };
 
   const handleUpdateStrategy = () => {
     updateList(list.id, { strategy: strategyText });
@@ -244,80 +206,13 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
         )}
 
         {isAddingTask && !compact && (
-          <form onSubmit={handleAddTask} className="space-y-2 mb-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600">
-            <input
-              type="text"
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              placeholder="Task title..."
-              className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
-              autoFocus
-            />
-            <select
-              value={newTaskPriority}
-              onChange={(e) => setNewTaskPriority(e.target.value as 'low' | 'medium' | 'high')}
-              className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
-            >
-              <option value="low">Low Priority</option>
-              <option value="medium">Medium Priority</option>
-              <option value="high">High Priority</option>
-            </select>
-            <input
-              type="date"
-              value={newTaskDueDate}
-              onChange={(e) => setNewTaskDueDate(e.target.value)}
-              className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
-              placeholder="Due date (optional)"
-            />
-            {isPersonalDashboard && list.project_id && projectLists.length > 1 && (
-              <select
-                value={selectedTargetList}
-                onChange={(e) => setSelectedTargetList(e.target.value)}
-                className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
-                required
-              >
-                <option value="">Select list...</option>
-                {projectLists.map(pList => (
-                  <option key={pList.id} value={pList.id}>
-                    {pList.title} ({pList.tasks?.length || 0} tasks)
-                  </option>
-                ))}
-              </select>
-            )}
-            {projectUsers && projectUsers.length > 0 && (
-              <select
-                value={newTaskAssignee}
-                onChange={(e) => setNewTaskAssignee(e.target.value)}
-                className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
-              >
-                <option value="">Unassigned</option>
-                {projectUsers.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <div className="flex space-x-2">
-              <button
-                type="submit"
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white p-2 text-sm rounded-lg transition-colors"
-              >
-                Create
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddingTask(false);
-                  setNewTaskTitle('');
-                  setNewTaskDueDate('');
-                }}
-                className="flex-1 bg-slate-300 hover:bg-slate-400 text-slate-700 p-2 text-sm rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+          <AddTaskModal
+            listId={list.id}
+            listName={list.title}
+            projectUsers={projectUsers}
+            isPersonalDashboard={isPersonalDashboard}
+            onClose={() => setIsAddingTask(false)}
+          />
         )}
 
         {/* Task List */}

@@ -9,6 +9,13 @@ export interface Task {
   assigned_to?: string;
   due_date?: string;
   dueDate?: Date;
+  start_time?: string;
+  end_time?: string;
+  duration_minutes?: number;
+  no_time_assigned?: boolean;
+  use_duration?: boolean;
+  goal_date?: string;
+  limit_date?: string;
   position: number;
   created_at: string;
   updated_at: string;

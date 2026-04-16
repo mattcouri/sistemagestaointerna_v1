@@ -449,6 +449,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       priority: taskData.priority || 'medium', completed: false,
       list_id: listId, assigned_to: taskData.assigned_to || null,
       due_date: taskData.due_date || null, position,
+      start_time: taskData.start_time || null,
+      end_time: taskData.end_time || null,
+      duration_minutes: taskData.duration_minutes || null,
+      no_time_assigned: taskData.no_time_assigned || false,
+      use_duration: taskData.use_duration || false,
+      goal_date: taskData.goal_date || null,
+      limit_date: taskData.limit_date || null,
     }).select().single();
 
     if (error) throw error;
