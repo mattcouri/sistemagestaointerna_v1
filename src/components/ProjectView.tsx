@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Monitor, Users, Target, Plus, User, CheckSquare } from 'lucide-react';
+import { ArrowLeft, Monitor, Users, Target, Plus } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ListColumn } from './ListColumn';
@@ -8,7 +8,7 @@ import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
 import { ProjectTasksArchive } from './ProjectTasksArchive';
 
 interface ProjectViewProps {
-  project: any; // Using any since Project type may have mismatches
+  project: any;
   onBack: () => void;
   onTVDashboard: () => void;
 }
@@ -16,6 +16,7 @@ interface ProjectViewProps {
 export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps) {
   const { getProjectLists, getUsersInProject, moveTask, createList, reorderProjectLists } = useApp();
   const { t } = useLanguage();
+  const [projectLists, setProjectLists] = useState<any[]>([]);
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
   const [showArchive, setShowArchive] = useState(false);
@@ -37,12 +38,16 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
     handleListDrop
   } = useListDragAndDrop();
 
-  const rawProjectLists = getProjectLists(project.id);
-  const projectLists = rawProjectLists.map(l => ({
-    ...l,
-    tasks: (l.tasks || []).filter((t: any) => !t.archived_at),
-  }));
   const projectUsers = getUsersInProject(project.id);
+
+  useEffect(() => {
+    loadProjectLists();
+  }, [project.id]);
+
+  const loadProjectLists = async () => {
+    const lists = await getProjectLists(project.id);
+    setProjectLists(lists);
+  };
 
   const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +57,7 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
         await createList(newListTitle.trim(), 'project', project.id);
         setNewListTitle('');
         setIsCreatingList(false);
+        await loadProjectLists();
       } catch (error) {
         console.error('Error creating list:', error);
       }

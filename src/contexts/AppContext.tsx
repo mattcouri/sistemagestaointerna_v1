@@ -26,7 +26,7 @@ interface AppContextType {
   createProject: (name: string, description: string, assignedUserIds: string[], color?: string) => Promise<void>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
-  getProjectLists: (projectId: string) => List[];
+  getProjectLists: (projectId: string) => Promise<List[]>;
   getUsersInProject: (projectId: string) => User[];
   getProjectMembers: (projectId: string) => Promise<User[]>;
 
@@ -421,8 +421,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       user_id: currentUser.id,
     }, { onConflict: 'project_id,user_id' });
 
-    setPendingInvitations(prev => prev.filter(i => i.id !== invitationId));
-    await refreshData();
+  const getProjectLists = async (projectId: string): Promise<List[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('lists')
+        .select(`
+          *,
+          tasks (*)
+        `)
+        .eq('project_id', projectId)
+        .order('position', { ascending: true });
+
+      if (error) throw error;
+
+      const listsWithDates = (data || []).map(list => ({
+        ...list,
+        tasks: (list.tasks || []).map(task => ({
+          ...task,
+          dueDate: task.due_date ? new Date(task.due_date) : undefined
+        }))
+      }));
+
+      return listsWithDates;
+    } catch (error) {
+      console.error('Error loading project lists:', error);
+      return [];
+    }
   };
 
   const declineInvitation = async (invitationId: string) => {
