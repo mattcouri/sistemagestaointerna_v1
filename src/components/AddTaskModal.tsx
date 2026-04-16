@@ -18,7 +18,10 @@ const PRIORITY_OPTIONS = [
 ];
 
 export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboard, onClose }: AddTaskModalProps) {
-  const { addTaskToList, projects, lists, getProjectLists } = useApp();
+  const { addTaskToList, projects, lists } = useApp();
+
+  const currentList = lists.find(l => l.id === listId);
+  const initialProjectId = currentList?.project_id || '';
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -31,12 +34,9 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
   const [limitDate, setLimitDate] = useState('');
   const [priority, setPriority] = useState<'none' | 'low' | 'medium' | 'high'>('none');
   const [assignee, setAssignee] = useState('');
-  const [selectedProject, setSelectedProject] = useState('');
+  const [selectedProject, setSelectedProject] = useState(initialProjectId);
+  const [selectedListId, setSelectedListId] = useState(listId);
   const [submitting, setSubmitting] = useState(false);
-
-  const currentList = lists.find(l => l.id === listId);
-  const projectId = currentList?.project_id;
-  const project = projectId ? projects.find(p => p.id === projectId) : null;
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -46,9 +46,26 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
+  const projectOptions = projects.filter(p =>
+    lists.some(l => l.project_id === p.id)
+  );
+
+  const listsForSelectedProject = selectedProject
+    ? lists.filter(l => l.project_id === selectedProject)
+    : lists.filter(l => !l.project_id);
+
+  useEffect(() => {
+    const match = listsForSelectedProject.find(l => l.id === selectedListId);
+    if (!match && listsForSelectedProject.length > 0) {
+      setSelectedListId(listsForSelectedProject[0].id);
+    } else if (listsForSelectedProject.length === 0) {
+      setSelectedListId('');
+    }
+  }, [selectedProject]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || !selectedListId) return;
     setSubmitting(true);
     try {
       const taskData: any = {
@@ -72,16 +89,16 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
         }
       }
 
-      await addTaskToList(listId, taskData);
+      await addTaskToList(selectedListId, taskData);
       onClose();
     } finally {
       setSubmitting(false);
     }
   };
 
-  const projectOptions = projects.filter(p =>
-    lists.some(l => l.project_id === p.id)
-  );
+  const inputClass = "w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm";
+  const selectClass = `${inputClass} appearance-none`;
+  const labelClass = "block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5";
 
   return (
     <div
@@ -103,25 +120,25 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4 max-h-[80vh] overflow-y-auto">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Title</label>
+            <label className={labelClass}>Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter task title..."
               autoFocus
-              className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm"
+              className={inputClass}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Description</label>
+            <label className={labelClass}>Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description..."
               rows={3}
-              className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm resize-none"
+              className={`${inputClass} resize-none`}
             />
           </div>
 
@@ -136,32 +153,32 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 disabled={noTimeAssigned}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                className={`${inputClass} disabled:opacity-40 disabled:cursor-not-allowed`}
               />
             </div>
 
             <div>
               {useDuration ? (
                 <>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Duration (min)</label>
+                  <label className={labelClass}>Duration (min)</label>
                   <input
                     type="number"
                     min={1}
                     value={durationMinutes}
                     onChange={(e) => setDurationMinutes(Number(e.target.value))}
                     disabled={noTimeAssigned}
-                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                    className={`${inputClass} disabled:opacity-40 disabled:cursor-not-allowed`}
                   />
                 </>
               ) : (
                 <>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">End Time</label>
+                  <label className={labelClass}>End Time</label>
                   <input
                     type="time"
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
                     disabled={noTimeAssigned}
-                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                    className={`${inputClass} disabled:opacity-40 disabled:cursor-not-allowed`}
                   />
                 </>
               )}
@@ -184,12 +201,7 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
                   </svg>
                 )}
               </div>
-              <input
-                type="checkbox"
-                checked={noTimeAssigned}
-                onChange={(e) => setNoTimeAssigned(e.target.checked)}
-                className="sr-only"
-              />
+              <input type="checkbox" checked={noTimeAssigned} onChange={(e) => setNoTimeAssigned(e.target.checked)} className="sr-only" />
               <span className="text-sm text-slate-600 dark:text-slate-300">No time or duration assigned</span>
             </label>
 
@@ -208,12 +220,7 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
                   </svg>
                 )}
               </div>
-              <input
-                type="checkbox"
-                checked={useDuration}
-                onChange={(e) => setUseDuration(e.target.checked)}
-                className="sr-only"
-              />
+              <input type="checkbox" checked={useDuration} onChange={(e) => setUseDuration(e.target.checked)} className="sr-only" />
               <span className="text-sm text-slate-600 dark:text-slate-300">Use duration instead of end time</span>
             </label>
           </div>
@@ -228,7 +235,7 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
                 type="date"
                 value={goalDate}
                 onChange={(e) => setGoalDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm dark:[color-scheme:dark]"
+                className={`${inputClass} dark:[color-scheme:dark]`}
               />
             </div>
             <div>
@@ -240,17 +247,17 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
                 type="date"
                 value={limitDate}
                 onChange={(e) => setLimitDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm dark:[color-scheme:dark]"
+                className={`${inputClass} dark:[color-scheme:dark]`}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Priority</label>
+            <label className={labelClass}>Priority</label>
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as any)}
-              className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm appearance-none"
+              className={selectClass}
             >
               {PRIORITY_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -258,38 +265,46 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
             </select>
           </div>
 
-          {project && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Project</label>
-              <div className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-700 dark:text-white text-sm">
-                {project.name}
-              </div>
-            </div>
-          )}
+          <div>
+            <label className={labelClass}>Project</label>
+            <select
+              value={selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value)}
+              className={selectClass}
+            >
+              <option value="">Personal</option>
+              {projectOptions.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
 
-          {!project && projectOptions.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Project</label>
+          <div>
+            <label className={labelClass}>List</label>
+            {listsForSelectedProject.length === 0 ? (
+              <div className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-400 dark:text-slate-500 text-sm">
+                No lists available
+              </div>
+            ) : (
               <select
-                value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm appearance-none"
+                value={selectedListId}
+                onChange={(e) => setSelectedListId(e.target.value)}
+                className={selectClass}
               >
-                <option value="">Personal</option>
-                {projectOptions.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                {listsForSelectedProject.map(l => (
+                  <option key={l.id} value={l.id}>{l.title}</option>
                 ))}
               </select>
-            </div>
-          )}
+            )}
+          </div>
 
           {projectUsers && projectUsers.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Assigned To</label>
+              <label className={labelClass}>Assigned To</label>
               <select
                 value={assignee}
                 onChange={(e) => setAssignee(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#2a3347] border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm appearance-none"
+                className={selectClass}
               >
                 <option value="">Unassigned</option>
                 {projectUsers.map(u => (
@@ -309,7 +324,7 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
             </button>
             <button
               type="submit"
-              disabled={!title.trim() || submitting}
+              disabled={!title.trim() || !selectedListId || submitting}
               className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: 'linear-gradient(135deg, #f97316, #ec4899)' }}
             >
