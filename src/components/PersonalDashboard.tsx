@@ -174,11 +174,12 @@ export function PersonalDashboard() {
 
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <CheckSquare className="w-7 h-7 text-pink-500" strokeWidth={2.5} />
-            <h1 className="text-2xl font-bold" style={{ color: '#f97316' }}>
-              To-Do Lists
-            </h1>
+          <div>
+            <div className="flex items-center space-x-3 mb-2">
+              <CheckSquare className="w-6 h-6 text-slate-600 dark:text-slate-400" />
+              <h1 className="text-3xl font-bold text-slate-800 dark:text-white">To-Do Lists</h1>
+            </div>
+            <p className="text-slate-600 dark:text-slate-300">Manage your personal tasks and to-do lists</p>
           </div>
           <div className="flex items-center gap-3">
             <button
