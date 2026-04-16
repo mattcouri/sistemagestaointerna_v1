@@ -221,8 +221,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   async function getProjectIds(userId: string): Promise<string> {
     const { data } = await supabase.from('project_members').select('project_id').eq('user_id', userId);
-    if (!data || data.length === 0) return "'00000000-0000-0000-0000-000000000000'";
-    return data.map(d => `'${d.project_id}'`).join(',');
+    if (!data || data.length === 0) return '00000000-0000-0000-0000-000000000000';
+    return data.map(d => d.project_id).join(',');
   }
 
   useEffect(() => {
