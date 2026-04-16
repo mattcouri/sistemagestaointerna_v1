@@ -17,6 +17,8 @@ export interface Task {
   goal_date?: string;
   limit_date?: string;
   position: number;
+  completed_at?: string;
+  archived_at?: string;
   created_at: string;
   updated_at: string;
 }

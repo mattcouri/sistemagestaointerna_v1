@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Target, Lock, FolderOpen, MoreVertical, Share2 } from 'lucide-react';
+import { Plus, Target, Lock, FolderOpen, MoreVertical, Share2, Archive as ArchiveIcon } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { TaskItem } from './TaskItem';
@@ -33,7 +33,7 @@ export function ListColumn({
   projectUsers,
   isPersonalDashboard = false,
 }: ListColumnProps) {
-  const { updateList, deleteList, projects, allProfiles, currentUser } = useApp();
+  const { updateList, deleteList, projects, allProfiles, currentUser, archiveCompletedTasks } = useApp();
   const { t } = useLanguage();
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -70,6 +70,13 @@ export function ListColumn({
   };
 
   const completedTasks = tasks.filter((task: any) => task.completed).length;
+  const archivableTasks = tasks.filter((task: any) => task.completed && !task.archived_at).length;
+
+  const handleArchiveCompleted = async () => {
+    if (archivableTasks === 0) return;
+    if (!confirm(`Move ${archivableTasks} completed task(s) to the archive?`)) return;
+    await archiveCompletedTasks(list.id);
+  };
 
   const sharedBorderClass = isShared
     ? 'border-2 border-blue-400/70 dark:border-blue-500/70 shadow-[0_0_12px_rgba(59,130,246,0.12)] dark:shadow-[0_0_12px_rgba(59,130,246,0.2)]'
@@ -180,7 +187,19 @@ export function ListColumn({
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>{completedTasks}/{tasks.length} completed</span>
+            <div className="flex items-center gap-2">
+              <span>{completedTasks}/{tasks.length} completed</span>
+              {!compact && archivableTasks > 0 && (
+                <button
+                  onClick={handleArchiveCompleted}
+                  title={`Archive ${archivableTasks} completed task(s)`}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors"
+                >
+                  <ArchiveIcon className="w-3 h-3" />
+                  Archive {archivableTasks}
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {list.type === 'project' && (
                 <span className="px-2 py-0.5 bg-blue-600 text-white rounded-full font-medium text-[10px] uppercase tracking-wide">

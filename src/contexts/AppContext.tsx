@@ -41,6 +41,9 @@ interface AppContextType {
   updateTask: (listId: string, taskId: string, updates: any) => Promise<void>;
   deleteTask: (listId: string, taskId: string) => Promise<void>;
   moveTask: (taskId: string, sourceListId: string, targetListId: string, targetIndex?: number) => Promise<void>;
+  archiveCompletedTasks: (listId: string) => Promise<void>;
+  unarchiveTask: (listId: string, taskId: string) => Promise<void>;
+  bulkDeleteArchivedTasks: (taskIds: string[]) => Promise<void>;
 
   addRoadmapIdea: (ideaData: any) => Promise<void>;
   updateRoadmapIdea: (id: string, updates: any) => Promise<void>;
@@ -553,13 +556,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const dbUpdates: any = { ...updates };
     delete dbUpdates.dueDate;
+    if (updates.completed === true && !dbUpdates.completed_at) {
+      const currentTask = lists.find(l => l.id === listId)?.tasks.find(t => t.id === taskId);
+      if (!currentTask?.completed_at) dbUpdates.completed_at = now();
+    }
     const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', taskId);
     if (error) throw error;
+    const completedAtUpdate = updates.completed === true ? { completed_at: dbUpdates.completed_at || now() } : {};
     setLists(prev => prev.map(l =>
       l.id === listId ? {
         ...l,
         tasks: l.tasks.map(t => t.id === taskId
-          ? { ...t, ...updates, dueDate: updates.due_date ? new Date(updates.due_date) : t.dueDate, updated_at: now() }
+          ? { ...t, ...updates, ...completedAtUpdate, dueDate: updates.due_date ? new Date(updates.due_date) : t.dueDate, updated_at: now() }
           : t
         ),
       } : l
@@ -607,6 +615,80 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       await supabase.from('tasks').update(updates).eq('id', taskId);
     }
+  };
+
+  const archiveCompletedTasks = async (listId: string) => {
+    const archiveTime = now();
+    if (isGuest) {
+      const updated = lists.map(l =>
+        l.id === listId ? {
+          ...l,
+          tasks: l.tasks.map(t =>
+            t.completed ? { ...t, archived_at: archiveTime, completed_at: t.completed_at || archiveTime } : t
+          ),
+        } : l
+      );
+      setLists(updated);
+      persist('lists', updated);
+      return;
+    }
+    const list = lists.find(l => l.id === listId);
+    if (!list) return;
+    const completedIds = list.tasks.filter(t => t.completed && !t.archived_at).map(t => t.id);
+    if (completedIds.length === 0) return;
+    await supabase.from('tasks')
+      .update({ archived_at: archiveTime, completed_at: archiveTime })
+      .in('id', completedIds)
+      .is('completed_at', null);
+    await supabase.from('tasks')
+      .update({ archived_at: archiveTime })
+      .in('id', completedIds)
+      .not('completed_at', 'is', null);
+    setLists(prev => prev.map(l =>
+      l.id === listId ? {
+        ...l,
+        tasks: l.tasks.map(t =>
+          t.completed && !t.archived_at
+            ? { ...t, archived_at: archiveTime, completed_at: t.completed_at || archiveTime }
+            : t
+        ),
+      } : l
+    ));
+  };
+
+  const unarchiveTask = async (listId: string, taskId: string) => {
+    if (isGuest) {
+      const updated = lists.map(l =>
+        l.id === listId ? {
+          ...l,
+          tasks: l.tasks.map(t => t.id === taskId ? { ...t, archived_at: undefined, completed: false, completed_at: undefined } : t),
+        } : l
+      );
+      setLists(updated);
+      persist('lists', updated);
+      return;
+    }
+    await supabase.from('tasks').update({ archived_at: null, completed: false, completed_at: null }).eq('id', taskId);
+    setLists(prev => prev.map(l =>
+      l.id === listId ? {
+        ...l,
+        tasks: l.tasks.map(t => t.id === taskId ? { ...t, archived_at: undefined, completed: false, completed_at: undefined } : t),
+      } : l
+    ));
+  };
+
+  const bulkDeleteArchivedTasks = async (taskIds: string[]) => {
+    if (taskIds.length === 0) return;
+    if (isGuest) {
+      const idSet = new Set(taskIds);
+      const updated = lists.map(l => ({ ...l, tasks: l.tasks.filter(t => !idSet.has(t.id)) }));
+      setLists(updated);
+      persist('lists', updated);
+      return;
+    }
+    await supabase.from('tasks').delete().in('id', taskIds);
+    const idSet = new Set(taskIds);
+    setLists(prev => prev.map(l => ({ ...l, tasks: l.tasks.filter(t => !idSet.has(t.id)) })));
   };
 
   // ─── Roadmap ─────────────────────────────────────────────────────────────────
@@ -715,7 +797,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     createProject, updateProject, deleteProject, getProjectLists, getUsersInProject, getProjectMembers,
     createList, updateList, deleteList, reorderLists, reorderProjectLists, shareList,
-    addTaskToList, updateTask, deleteTask, moveTask,
+    addTaskToList, updateTask, deleteTask, moveTask, archiveCompletedTasks, unarchiveTask, bulkDeleteArchivedTasks,
     addRoadmapIdea, updateRoadmapIdea, deleteRoadmapIdea,
     inviteToProject, removeFromProject, acceptInvitation, declineInvitation,
     createOrganization, updateOrganization, deleteOrganization, assignUserToOrganization,

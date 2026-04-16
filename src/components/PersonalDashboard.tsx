@@ -6,6 +6,7 @@ import { ListColumn } from './ListColumn';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
 import { AddTaskModal } from './AddTaskModal';
+import { CompletedTasksArchive } from './CompletedTasksArchive';
 
 export function PersonalDashboard() {
   const { currentUser, createList, lists, allProfiles, projects, moveTask, reorderLists } = useApp();
@@ -13,6 +14,7 @@ export function PersonalDashboard() {
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -64,6 +66,7 @@ export function PersonalDashboard() {
 
     return base.map(list => {
       const filtered = (list.tasks || []).filter((task: any) => {
+        if (task.archived_at) return false;
         const matchSearch = !searchQuery || task.title.toLowerCase().includes(searchQuery.toLowerCase());
         const matchPriority = !filterPriority || task.priority === filterPriority;
         const matchAssignee = !filterAssignee || task.assigned_to === filterAssignee;
@@ -91,6 +94,10 @@ export function PersonalDashboard() {
   const kpiHighPriority = kpiTasks.filter(t => !t.completed && t.priority === 'high').length;
 
   if (!currentUser) return null;
+
+  if (showArchive) {
+    return <CompletedTasksArchive onBack={() => setShowArchive(false)} />;
+  }
 
   const handleCreateList = (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,7 +181,10 @@ export function PersonalDashboard() {
             </h1>
           </div>
           <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-400 text-white text-sm font-medium rounded-lg transition-colors">
+            <button
+              onClick={() => setShowArchive(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-400 text-white text-sm font-medium rounded-lg transition-colors"
+            >
               <CheckSquare className="w-4 h-4" />
               Completed Tasks
             </button>

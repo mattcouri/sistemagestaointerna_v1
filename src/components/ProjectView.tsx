@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Monitor, Users, Target, Plus, User } from 'lucide-react';
+import { ArrowLeft, Monitor, Users, Target, Plus, User, CheckSquare } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ListColumn } from './ListColumn';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
+import { ProjectTasksArchive } from './ProjectTasksArchive';
 
 interface ProjectViewProps {
   project: any; // Using any since Project type may have mismatches
@@ -17,6 +18,7 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
   const { t } = useLanguage();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
+  const [showArchive, setShowArchive] = useState(false);
   const {
     draggedTask,
     dropTarget,
@@ -35,7 +37,11 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
     handleListDrop
   } = useListDragAndDrop();
 
-  const projectLists = getProjectLists(project.id);
+  const rawProjectLists = getProjectLists(project.id);
+  const projectLists = rawProjectLists.map(l => ({
+    ...l,
+    tasks: (l.tasks || []).filter((t: any) => !t.archived_at),
+  }));
   const projectUsers = getUsersInProject(project.id);
 
   const handleCreateList = async (e: React.FormEvent) => {
@@ -67,6 +73,10 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
     
     reorderProjectLists(project.id, newListOrder.map(list => list.id));
   };
+
+  if (showArchive) {
+    return <ProjectTasksArchive project={project} onBack={() => setShowArchive(false)} />;
+  }
 
   return (
     <div className="p-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
@@ -117,8 +127,15 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
             </div>
             
             <button
+              onClick={() => setShowArchive(true)}
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center space-x-2 text-sm font-medium"
+            >
+              <CheckSquare className="w-4 h-4" />
+              <span>Completed Tasks</span>
+            </button>
+            <button
               onClick={onTVDashboard}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
             >
               <Monitor className="w-5 h-5" />
               <span>TV Dashboard</span>
