@@ -10,7 +10,9 @@ interface TaskItemProps {
   listId: string;
   compact?: boolean;
   projectUsers?: UserType[];
+  isDragging?: boolean;
   onDragStart: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
 }
 
 function priorityBarColor(priority: Task['priority']): string {
@@ -23,7 +25,7 @@ function priorityBarColor(priority: Task['priority']): string {
 }
 
 
-export function TaskItem({ task, listId, compact = false, projectUsers, onDragStart }: TaskItemProps) {
+export function TaskItem({ task, listId, compact = false, projectUsers, isDragging = false, onDragStart, onDragEnd }: TaskItemProps) {
   const { updateTask, allProfiles } = useApp();
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -49,9 +51,10 @@ export function TaskItem({ task, listId, compact = false, projectUsers, onDragSt
         <div
           draggable
           onDragStart={onDragStart}
-          className={`flex items-center gap-0 bg-[#252d3d] hover:bg-[#2a3347] rounded-lg cursor-move transition-colors overflow-hidden ${
+          onDragEnd={onDragEnd}
+          className={`flex items-center gap-0 bg-[#252d3d] hover:bg-[#2a3347] rounded-lg cursor-move transition-all overflow-hidden ${
             task.completed ? 'opacity-50' : ''
-          }`}
+          } ${isDragging ? 'opacity-30 scale-[0.98]' : ''}`}
           onDoubleClick={() => setShowEditModal(true)}
         >
           {/* Priority color bar */}

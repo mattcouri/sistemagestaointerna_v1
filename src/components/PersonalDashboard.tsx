@@ -8,7 +8,7 @@ import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
 import { AddTaskModal } from './AddTaskModal';
 
 export function PersonalDashboard() {
-  const { currentUser, createList, lists, allProfiles, projects } = useApp();
+  const { currentUser, createList, lists, allProfiles, projects, moveTask } = useApp();
   const { t } = useLanguage();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -16,7 +16,15 @@ export function PersonalDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
-  const { draggedTask, handleDragStart, handleDragEnd, handleDragOver } = useDragAndDrop();
+  const {
+    draggedTask,
+    dropTarget,
+    handleDragStart,
+    handleDragEnd,
+    handleDragOver,
+    handleTaskDragOver,
+    handleListAreaDragOver,
+  } = useDragAndDrop();
   const {
     draggedList,
     handleListDragStart,
@@ -70,9 +78,12 @@ export function PersonalDashboard() {
     }
   };
 
-  const handleDrop = (e: React.DragEvent, targetListId: string) => {
+  const handleDrop = (e: React.DragEvent, targetListId: string, targetIndex?: number) => {
     e.preventDefault();
+    if (!draggedTask) { handleDragEnd(); return; }
+    const { task, sourceListId } = draggedTask;
     handleDragEnd();
+    moveTask(task.id, sourceListId, targetListId, targetIndex);
   };
 
   const handleListReorder = (sourceIndex: number, targetIndex: number) => {
@@ -226,8 +237,12 @@ export function PersonalDashboard() {
             >
               <ListColumn
                 list={list}
-                onDragStart={handleDragStart}
-                onDragOver={handleDragOver}
+                draggedTask={draggedTask}
+                dropTarget={dropTarget}
+                onTaskDragStart={handleDragStart}
+                onTaskDragEnd={handleDragEnd}
+                onTaskDragOver={handleTaskDragOver}
+                onListAreaDragOver={handleListAreaDragOver}
                 onDrop={handleDrop}
                 isPersonalDashboard={true}
                 projectUsers={list.type === 'project' && list.project_id ? allProfiles : undefined}

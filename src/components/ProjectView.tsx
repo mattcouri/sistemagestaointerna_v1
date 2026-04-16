@@ -17,7 +17,15 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
   const { t } = useLanguage();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
-  const { draggedTask, handleDragStart, handleDragEnd, handleDragOver } = useDragAndDrop();
+  const {
+    draggedTask,
+    dropTarget,
+    handleDragStart,
+    handleDragEnd,
+    handleDragOver,
+    handleTaskDragOver,
+    handleListAreaDragOver,
+  } = useDragAndDrop();
   const { 
     draggedList, 
     handleListDragStart, 
@@ -43,17 +51,12 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
     }
   };
 
-  const handleDrop = (e: React.DragEvent, targetListId: string) => {
+  const handleDrop = (e: React.DragEvent, targetListId: string, targetIndex?: number) => {
     e.preventDefault();
-    handleDragEnd();
-    
-    if (!draggedTask) return;
-    
+    if (!draggedTask) { handleDragEnd(); return; }
     const { task, sourceListId } = draggedTask;
-    
-    if (sourceListId === targetListId) return;
-
-    moveTask(task.id, sourceListId, targetListId);
+    handleDragEnd();
+    moveTask(task.id, sourceListId, targetListId, targetIndex);
   };
 
   const handleListReorder = (sourceIndex: number, targetIndex: number) => {
@@ -135,8 +138,12 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
             >
             <ListColumn
               list={list}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
+              draggedTask={draggedTask}
+              dropTarget={dropTarget}
+              onTaskDragStart={handleDragStart}
+              onTaskDragEnd={handleDragEnd}
+              onTaskDragOver={handleTaskDragOver}
+              onListAreaDragOver={handleListAreaDragOver}
               onDrop={handleDrop}
               projectUsers={projectUsers}
             />

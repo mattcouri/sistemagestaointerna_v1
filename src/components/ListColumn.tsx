@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Target, Lock, FolderOpen, MoreVertical, Share2, Users } from 'lucide-react';
+import { Plus, Target, Lock, FolderOpen, MoreVertical, Share2 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { TaskItem } from './TaskItem';
@@ -8,16 +8,32 @@ import { ShareListModal } from './ShareListModal';
 
 interface ListColumnProps {
   list: any;
-  onDragStart: (task: any, sourceListId: string) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, targetListId: string) => void;
+  draggedTask: { task: any; sourceListId: string } | null;
+  dropTarget: { listId: string; index: number } | null;
+  onTaskDragStart: (task: any, sourceListId: string) => void;
+  onTaskDragEnd: () => void;
+  onTaskDragOver: (e: React.DragEvent, listId: string, index: number) => void;
+  onListAreaDragOver: (e: React.DragEvent, listId: string, taskCount: number) => void;
+  onDrop: (e: React.DragEvent, targetListId: string, targetIndex?: number) => void;
   compact?: boolean;
   projectUsers?: any[];
   isPersonalDashboard?: boolean;
 }
 
-export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = false, projectUsers, isPersonalDashboard = false }: ListColumnProps) {
-  const { updateList, deleteList, projects, getProjectLists, allProfiles, currentUser } = useApp();
+export function ListColumn({
+  list,
+  draggedTask,
+  dropTarget,
+  onTaskDragStart,
+  onTaskDragEnd,
+  onTaskDragOver,
+  onListAreaDragOver,
+  onDrop,
+  compact = false,
+  projectUsers,
+  isPersonalDashboard = false,
+}: ListColumnProps) {
+  const { updateList, deleteList, projects, allProfiles, currentUser } = useApp();
   const { t } = useLanguage();
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -27,14 +43,16 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(list.title);
 
-  const project = list.project_id ? projects.find(p => p.id === list.project_id) : null;
-  const projectLists = list.project_id ? getProjectLists(list.project_id) : [];
+  const project = list.project_id ? projects.find((p: any) => p.id === list.project_id) : null;
 
   const isShared = !!(list.is_shared || (list.shared_with && list.shared_with.length > 0));
   const isOwner = list.user_id === currentUser?.id;
   const sharedWithUsers = (list.shared_with || [])
-    .map((uid: string) => allProfiles.find(u => u.id === uid))
+    .map((uid: string) => allProfiles.find((u: any) => u.id === uid))
     .filter(Boolean);
+
+  const tasks: any[] = list.tasks || [];
+  const isDraggingOver = dropTarget?.listId === list.id;
 
   const handleUpdateStrategy = () => {
     updateList(list.id, { strategy: strategyText });
@@ -51,19 +69,19 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
     }
   };
 
-  const completedTasks = (list.tasks || []).filter((task: any) => task.completed).length;
-  const totalTasks = list.tasks?.length || 0;
+  const completedTasks = tasks.filter((task: any) => task.completed).length;
 
   const sharedBorderClass = isShared
     ? 'border-2 border-blue-500/70 shadow-[0_0_12px_rgba(59,130,246,0.2)]'
     : 'border border-slate-700/60';
 
+  const showDropIndicator = (index: number) =>
+    isDraggingOver && dropTarget?.index === index && !!draggedTask;
+
   return (
     <>
       <div
         className={`${compact ? 'w-56' : 'w-72'} flex-shrink-0 bg-[#1e2535] ${sharedBorderClass} rounded-xl shadow-sm overflow-hidden`}
-        onDragOver={onDragOver}
-        onDrop={(e) => onDrop(e, list.id)}
       >
         {/* List Header */}
         <div className={`${compact ? 'p-2' : 'p-3'} ${isShared ? 'bg-blue-950/30' : 'bg-slate-800/50'} border-b border-slate-700/50`}>
@@ -150,7 +168,7 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>{completedTasks}/{totalTasks} completed</span>
+            <span>{completedTasks}/{tasks.length} completed</span>
             <div className="flex items-center gap-2">
               {list.type === 'project' && (
                 <span className="px-2 py-0.5 bg-blue-600 text-white rounded-full font-medium text-[10px] uppercase tracking-wide">
@@ -183,7 +201,6 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
           </div>
         </div>
 
-        {/* Click outside to close menu */}
         {showMenu && (
           <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
         )}
@@ -224,7 +241,13 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
         </div>
 
         {/* Tasks Section */}
-        <div className={`${compact ? 'p-2' : 'p-3'} bg-[#1e2535]`}>
+        <div
+          className={`${compact ? 'p-2' : 'p-3'} bg-[#1e2535] transition-colors ${
+            isDraggingOver && tasks.length === 0 ? 'bg-blue-950/20' : ''
+          }`}
+          onDragOver={(e) => onListAreaDragOver(e, list.id, tasks.length)}
+          onDrop={(e) => { e.preventDefault(); onDrop(e, list.id, dropTarget?.listId === list.id ? dropTarget.index : undefined); }}
+        >
           {!compact && !isAddingTask && (
             <button
               onClick={() => setIsAddingTask(true)}
@@ -245,23 +268,56 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
             />
           )}
 
-          <div className="space-y-1">
-            {(list.tasks || []).map((task: any) => (
-              <TaskItem
+          <div className="space-y-0">
+            {/* Drop indicator at top */}
+            <DropLine visible={showDropIndicator(0)} />
+
+            {tasks.map((task: any, index: number) => (
+              <div
                 key={task.id}
-                task={task}
-                listId={list.id}
-                compact={compact}
-                projectUsers={projectUsers}
-                onDragStart={(e) => onDragStart(task, list.id)}
-              />
+                onDragOver={(e) => {
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  const midY = rect.top + rect.height / 2;
+                  const insertIndex = e.clientY < midY ? index : index + 1;
+                  onTaskDragOver(e, list.id, insertIndex);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  const midY = rect.top + rect.height / 2;
+                  const insertIndex = e.clientY < midY ? index : index + 1;
+                  onDrop(e, list.id, insertIndex);
+                }}
+                className="relative"
+              >
+                <div className="mb-1">
+                  <TaskItem
+                    task={task}
+                    listId={list.id}
+                    compact={compact}
+                    projectUsers={projectUsers}
+                    isDragging={draggedTask?.task.id === task.id}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = 'move';
+                      onTaskDragStart(task, list.id);
+                    }}
+                    onDragEnd={onTaskDragEnd}
+                  />
+                </div>
+                <DropLine visible={showDropIndicator(index + 1)} />
+              </div>
             ))}
 
-            {(list.tasks?.length || 0) === 0 && (
-              <div className={`${compact ? 'p-3 text-xs' : 'p-4 text-sm'} text-center text-slate-500 bg-slate-800/40 rounded-lg border-2 border-dashed border-slate-700/60`}>
-                <Target className={`${compact ? 'w-6 h-6' : 'w-8 h-8'} mx-auto mb-1 text-slate-600`} />
-                <p className="text-xs">No tasks yet</p>
-                {!compact && <p className="text-xs mt-1 text-slate-600">Add a task to get started</p>}
+            {tasks.length === 0 && (
+              <div
+                className={`${compact ? 'p-3 text-xs' : 'p-4 text-sm'} text-center text-slate-500 rounded-lg border-2 border-dashed transition-colors ${
+                  isDraggingOver ? 'border-blue-500/60 bg-blue-950/20 text-blue-400' : 'bg-slate-800/40 border-slate-700/60'
+                }`}
+              >
+                <Target className={`${compact ? 'w-6 h-6' : 'w-8 h-8'} mx-auto mb-1 ${isDraggingOver ? 'text-blue-500' : 'text-slate-600'}`} />
+                <p className="text-xs">{isDraggingOver ? 'Drop here' : 'No tasks yet'}</p>
+                {!compact && !isDraggingOver && <p className="text-xs mt-1 text-slate-600">Add a task to get started</p>}
               </div>
             )}
           </div>
@@ -275,5 +331,15 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
         />
       )}
     </>
+  );
+}
+
+function DropLine({ visible }: { visible: boolean }) {
+  return (
+    <div
+      className={`h-0.5 rounded-full mx-1 transition-all duration-150 ${
+        visible ? 'bg-blue-400 opacity-100 mb-1' : 'bg-transparent opacity-0 mb-0'
+      }`}
+    />
   );
 }

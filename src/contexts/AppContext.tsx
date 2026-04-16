@@ -40,7 +40,7 @@ interface AppContextType {
   addTaskToList: (listId: string, taskData: any) => Promise<void>;
   updateTask: (listId: string, taskId: string, updates: any) => Promise<void>;
   deleteTask: (listId: string, taskId: string) => Promise<void>;
-  moveTask: (taskId: string, sourceListId: string, targetListId: string) => Promise<void>;
+  moveTask: (taskId: string, sourceListId: string, targetListId: string, targetIndex?: number) => Promise<void>;
 
   addRoadmapIdea: (ideaData: any) => Promise<void>;
   updateRoadmapIdea: (id: string, updates: any) => Promise<void>;
@@ -578,16 +578,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setLists(prev => prev.map(l => l.id === listId ? { ...l, tasks: l.tasks.filter(t => t.id !== taskId) } : l));
   };
 
-  const moveTask = async (taskId: string, sourceListId: string, targetListId: string) => {
-    const task = lists.find(l => l.id === sourceListId)?.tasks.find(t => t.id === taskId);
+  const moveTask = async (taskId: string, sourceListId: string, targetListId: string, targetIndex?: number) => {
+    const sourceList = lists.find(l => l.id === sourceListId);
+    const task = sourceList?.tasks.find(t => t.id === taskId);
     if (!task) return;
+
     setLists(prev => prev.map(l => {
-      if (l.id === sourceListId) return { ...l, tasks: l.tasks.filter(t => t.id !== taskId) };
-      if (l.id === targetListId) return { ...l, tasks: [...l.tasks, { ...task, list_id: targetListId }] };
+      if (l.id === sourceListId && l.id !== targetListId) {
+        return { ...l, tasks: l.tasks.filter(t => t.id !== taskId) };
+      }
+      if (l.id === targetListId) {
+        const withoutTask = l.tasks.filter(t => t.id !== taskId);
+        const updatedTask = { ...task, list_id: targetListId };
+        if (targetIndex === undefined || targetIndex >= withoutTask.length) {
+          return { ...l, tasks: [...withoutTask, updatedTask] };
+        }
+        const newTasks = [...withoutTask];
+        newTasks.splice(targetIndex, 0, updatedTask);
+        return { ...l, tasks: newTasks };
+      }
       return l;
     }));
+
     if (!isGuest) {
-      await supabase.from('tasks').update({ list_id: targetListId }).eq('id', taskId);
+      const updates: any = { list_id: targetListId };
+      if (targetIndex !== undefined) {
+        updates.position = targetIndex;
+      }
+      await supabase.from('tasks').update(updates).eq('id', taskId);
     }
   };
 
