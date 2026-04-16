@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Clock, Target, Calendar } from 'lucide-react';
+import { X, Clock, Target, Calendar, AlertTriangle } from 'lucide-react';
 import { Task, User } from '../types';
 import { useApp } from '../contexts/AppContext';
 
@@ -34,6 +34,8 @@ export function EditTaskModal({ task, listId, projectUsers, onClose }: EditTaskM
 
   const users = projectUsers ?? allProfiles;
 
+  const dateOrderError = goalDate && limitDate && goalDate > limitDate;
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -44,7 +46,7 @@ export function EditTaskModal({ task, listId, projectUsers, onClose }: EditTaskM
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || dateOrderError) return;
     setSubmitting(true);
     try {
       const updates: any = {
@@ -201,32 +203,46 @@ export function EditTaskModal({ task, listId, projectUsers, onClose }: EditTaskM
             </label>
           </div>
 
+          {/* Dates */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="flex items-center gap-1.5 text-sm font-medium text-slate-300 mb-1.5">
-                <Target className="w-3.5 h-3.5" />
+                <Target className="w-3.5 h-3.5 text-green-400" />
                 Goal Date
               </label>
               <input
                 type="date"
                 value={goalDate}
                 onChange={(e) => setGoalDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-[#2a3347] border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm [color-scheme:dark]"
+                className={`w-full px-3 py-2.5 bg-[#2a3347] border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm [color-scheme:dark] ${
+                  dateOrderError ? 'border-amber-500/80' : 'border-slate-600/50 focus:border-blue-500/50'
+                }`}
               />
             </div>
             <div>
               <label className="flex items-center gap-1.5 text-sm font-medium text-slate-300 mb-1.5">
-                <Calendar className="w-3.5 h-3.5" />
+                <Calendar className="w-3.5 h-3.5 text-red-400" />
                 Limit Date
               </label>
               <input
                 type="date"
                 value={limitDate}
                 onChange={(e) => setLimitDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-[#2a3347] border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm [color-scheme:dark]"
+                className={`w-full px-3 py-2.5 bg-[#2a3347] border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm [color-scheme:dark] ${
+                  dateOrderError ? 'border-amber-500/80' : 'border-slate-600/50 focus:border-blue-500/50'
+                }`}
               />
             </div>
           </div>
+
+          {dateOrderError && (
+            <div className="flex items-start gap-2.5 px-3 py-2.5 bg-amber-500/10 border border-amber-500/40 rounded-lg">
+              <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-300 leading-relaxed">
+                Goal date cannot be later than limit date. Please adjust the dates before saving.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1.5">Priority</label>
@@ -267,7 +283,7 @@ export function EditTaskModal({ task, listId, projectUsers, onClose }: EditTaskM
             </button>
             <button
               type="submit"
-              disabled={!title.trim() || submitting}
+              disabled={!title.trim() || !!dateOrderError || submitting}
               className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: 'linear-gradient(135deg, #f97316, #ec4899)' }}
             >

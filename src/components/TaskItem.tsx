@@ -3,6 +3,7 @@ import { Circle, CheckCircle2, User } from 'lucide-react';
 import { Task, User as UserType } from '../types';
 import { useApp } from '../contexts/AppContext';
 import { EditTaskModal } from './EditTaskModal';
+import { TaskDateBadge } from './TaskDateBadge';
 
 interface TaskItemProps {
   task: Task;
@@ -21,12 +22,6 @@ function priorityBarColor(priority: Task['priority']): string {
   }
 }
 
-function formatDate(dateStr?: string): string | null {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 export function TaskItem({ task, listId, compact = false, projectUsers, onDragStart }: TaskItemProps) {
   const { updateTask, allProfiles } = useApp();
@@ -46,7 +41,6 @@ export function TaskItem({ task, listId, compact = false, projectUsers, onDragSt
   const assignedUser =
     (projectUsers ?? allProfiles)?.find(u => u.id === (task.assigned_to || (task as any).assignedTo));
 
-  const displayDate = formatDate(task.limit_date || task.goal_date || task.due_date);
   const barColor = priorityBarColor(task.priority);
 
   return (
@@ -89,11 +83,11 @@ export function TaskItem({ task, listId, compact = false, projectUsers, onDragSt
             </span>
           </div>
 
-          {/* Date */}
-          {displayDate && (
-            <span className="text-xs text-slate-400 flex-shrink-0 pl-1 pr-2 whitespace-nowrap">
-              {displayDate}
-            </span>
+          {/* Date badge */}
+          {(task.goal_date || task.limit_date) && (
+            <div className="flex-shrink-0 pl-1 pr-2">
+              <TaskDateBadge goalDate={task.goal_date} limitDate={task.limit_date} />
+            </div>
           )}
 
           {/* Assignee avatar */}
