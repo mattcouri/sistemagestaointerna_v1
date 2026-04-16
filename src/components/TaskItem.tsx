@@ -52,7 +52,7 @@ export function TaskItem({ task, listId, compact = false, projectUsers, isDraggi
           draggable
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
-          className={`flex items-center gap-0 bg-[#252d3d] hover:bg-[#2a3347] rounded-lg cursor-move transition-all overflow-hidden ${
+          className={`flex items-center gap-0 bg-white dark:bg-[#252d3d] hover:bg-slate-50 dark:hover:bg-[#2a3347] rounded-lg cursor-move transition-all overflow-hidden border border-slate-100 dark:border-transparent ${
             task.completed ? 'opacity-50' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''}`}
           onDoubleClick={() => setShowEditModal(true)}
@@ -66,7 +66,7 @@ export function TaskItem({ task, listId, compact = false, projectUsers, isDraggi
           {/* Checkbox */}
           <button
             onClick={handleToggleComplete}
-            className="flex-shrink-0 px-2.5 py-2.5 text-slate-400 hover:text-white transition-colors"
+            className="flex-shrink-0 px-2.5 py-2.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors"
           >
             {task.completed ? (
               <CheckCircle2 className="w-4 h-4 text-green-400" />
@@ -79,7 +79,7 @@ export function TaskItem({ task, listId, compact = false, projectUsers, isDraggi
           <div className="flex-1 min-w-0 py-2.5 pr-1">
             <span
               className={`text-sm font-medium truncate block ${
-                task.completed ? 'line-through text-slate-500' : 'text-slate-100'
+                task.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-100'
               }`}
             >
               {task.title}
@@ -98,7 +98,7 @@ export function TaskItem({ task, listId, compact = false, projectUsers, isDraggi
             {assignedUser ? (
               <button
                 onClick={(e) => { e.stopPropagation(); setShowAssigneeDropdown(!showAssigneeDropdown); }}
-                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold ring-2 ring-[#252d3d] hover:ring-blue-500 transition-all"
+                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold ring-2 ring-white dark:ring-[#252d3d] hover:ring-blue-500 transition-all"
                 style={{ backgroundColor: assignedUser.color }}
                 title={assignedUser.name}
               >
@@ -120,10 +120,10 @@ export function TaskItem({ task, listId, compact = false, projectUsers, isDraggi
         {showAssigneeDropdown && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setShowAssigneeDropdown(false)} />
-            <div className="absolute right-0 top-full mt-1 bg-[#1e2535] border border-slate-600/60 rounded-xl shadow-2xl z-50 min-w-40 max-h-48 overflow-y-auto">
+            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[#1e2535] border border-slate-200 dark:border-slate-600/60 rounded-xl shadow-2xl z-50 min-w-40 max-h-48 overflow-y-auto">
               <button
                 onClick={() => handleAssignUser('')}
-                className="w-full text-left px-3 py-2.5 text-xs text-slate-300 hover:bg-slate-700/60 transition-colors"
+                className="w-full text-left px-3 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors"
               >
                 Unassigned
               </button>
@@ -131,7 +131,7 @@ export function TaskItem({ task, listId, compact = false, projectUsers, isDraggi
                 <button
                   key={user.id}
                   onClick={() => handleAssignUser(user.id)}
-                  className="w-full text-left px-3 py-2.5 text-xs text-slate-200 hover:bg-slate-700/60 transition-colors flex items-center gap-2.5"
+                  className="w-full text-left px-3 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors flex items-center gap-2.5"
                 >
                   <div
                     className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"

@@ -150,7 +150,7 @@ export function AdminPanel() {
     <div className="p-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center space-x-3 mb-6">
-          <div className="w-10 h-10 bg-slate-800 dark:bg-slate-700 rounded-lg flex items-center justify-center">
+          <div className="w-10 h-10 bg-slate-700 dark:bg-slate-700 rounded-lg flex items-center justify-center">
             <Shield className="w-5 h-5 text-white" />
           </div>
           <div>
@@ -170,7 +170,7 @@ export function AdminPanel() {
             onClick={() => setActiveTab('users')}
             className={`px-5 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
               activeTab === 'users'
-                ? 'bg-slate-800 dark:bg-slate-600 text-white'
+                ? 'bg-slate-700 dark:bg-slate-600 text-white'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
@@ -181,7 +181,7 @@ export function AdminPanel() {
             onClick={() => setActiveTab('organizations')}
             className={`px-5 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
               activeTab === 'organizations'
-                ? 'bg-slate-800 dark:bg-slate-600 text-white'
+                ? 'bg-slate-700 dark:bg-slate-600 text-white'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
@@ -345,7 +345,7 @@ export function AdminPanel() {
             <div className="flex justify-end">
               <button
                 onClick={() => setShowNewOrgForm(true)}
-                className="bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 text-sm"
+                className="bg-slate-700 dark:bg-slate-700 hover:bg-slate-600 dark:hover:bg-slate-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 text-sm"
               >
                 <Plus className="w-4 h-4" />
                 <span>New Organization</span>

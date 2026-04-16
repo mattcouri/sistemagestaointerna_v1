@@ -154,7 +154,8 @@ export function TaskDateBadge({ goalDate, limitDate }: TaskDateBadgeProps) {
             cy="9"
             r={radius}
             fill="none"
-            stroke="#334155"
+            stroke="currentColor"
+            className="text-slate-200 dark:text-[#334155]"
             strokeWidth="2.5"
           />
           <circle
@@ -173,7 +174,7 @@ export function TaskDateBadge({ goalDate, limitDate }: TaskDateBadgeProps) {
       </div>
       <div className="flex flex-col leading-none">
         {displayDate && (
-          <span className="text-[9px] text-slate-400 whitespace-nowrap">{displayDate}</span>
+          <span className="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">{displayDate}</span>
         )}
         {label && (
           <span className="text-[9px] font-semibold whitespace-nowrap" style={{ color: labelColor }}>

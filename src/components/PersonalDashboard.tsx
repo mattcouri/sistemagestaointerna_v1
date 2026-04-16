@@ -102,46 +102,46 @@ export function PersonalDashboard() {
       label: 'Active Tasks',
       value: kpiActive,
       icon: <CheckSquare className="w-8 h-8" />,
-      border: 'border-blue-500/60',
-      bg: 'bg-blue-950/40',
-      labelColor: 'text-blue-400',
-      valueColor: 'text-white',
-      iconColor: 'text-blue-400',
+      border: 'border-blue-200 dark:border-blue-500/60',
+      bg: 'bg-blue-50 dark:bg-blue-950/40',
+      labelColor: 'text-blue-600 dark:text-blue-400',
+      valueColor: 'text-blue-900 dark:text-white',
+      iconColor: 'text-blue-300 dark:text-blue-400',
     },
     {
       label: 'Completed',
       value: kpiCompleted,
       icon: <CheckCheck className="w-8 h-8" />,
-      border: 'border-green-500/60',
-      bg: 'bg-green-950/40',
-      labelColor: 'text-green-400',
-      valueColor: 'text-white',
-      iconColor: 'text-green-400',
+      border: 'border-green-200 dark:border-green-500/60',
+      bg: 'bg-green-50 dark:bg-green-950/40',
+      labelColor: 'text-green-600 dark:text-green-400',
+      valueColor: 'text-green-900 dark:text-white',
+      iconColor: 'text-green-300 dark:text-green-400',
     },
     {
       label: 'Overdue',
       value: kpiOverdue,
       icon: <CalendarX className="w-8 h-8" />,
-      border: 'border-red-500/60',
-      bg: 'bg-red-950/40',
-      labelColor: 'text-red-400',
-      valueColor: 'text-white',
-      iconColor: 'text-red-400',
+      border: 'border-red-200 dark:border-red-500/60',
+      bg: 'bg-red-50 dark:bg-red-950/40',
+      labelColor: 'text-red-600 dark:text-red-400',
+      valueColor: 'text-red-900 dark:text-white',
+      iconColor: 'text-red-300 dark:text-red-400',
     },
     {
       label: 'High Priority',
       value: kpiHighPriority,
       icon: <Target className="w-8 h-8" />,
-      border: 'border-orange-500/60',
-      bg: 'bg-orange-950/40',
-      labelColor: 'text-orange-400',
-      valueColor: 'text-white',
-      iconColor: 'text-orange-400',
+      border: 'border-orange-200 dark:border-orange-500/60',
+      bg: 'bg-orange-50 dark:bg-orange-950/40',
+      labelColor: 'text-orange-600 dark:text-orange-400',
+      valueColor: 'text-orange-900 dark:text-white',
+      iconColor: 'text-orange-300 dark:text-orange-400',
     },
   ];
 
   return (
-    <div className="p-6 bg-slate-900 min-h-screen">
+    <div className="p-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
       <div className="max-w-7xl mx-auto">
 
         {/* Header */}
@@ -197,8 +197,8 @@ export function PersonalDashboard() {
         </div>
 
         {/* Filters */}
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-5 py-4 mb-6">
-          <p className="text-sm font-semibold text-white mb-3">Filter Tasks</p>
+        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl px-5 py-4 mb-6 shadow-sm">
+          <p className="text-sm font-semibold text-slate-800 dark:text-white mb-3">Filter Tasks</p>
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -207,13 +207,13 @@ export function PersonalDashboard() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search tasks..."
-                className="w-full pl-9 pr-3 py-2.5 bg-slate-700/60 border border-slate-600/50 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
               />
             </div>
             <select
               value={filterProject}
               onChange={(e) => setFilterProject(e.target.value)}
-              className="flex-1 min-w-0 px-3 py-2.5 bg-slate-700/60 border border-slate-600/50 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 appearance-none"
+              className="flex-1 min-w-0 px-3 py-2.5 bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 appearance-none"
             >
               <option value="">All Projects</option>
               <option value="__personal">Personal</option>
@@ -224,7 +224,7 @@ export function PersonalDashboard() {
             <select
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
-              className="flex-1 min-w-0 px-3 py-2.5 bg-slate-700/60 border border-slate-600/50 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 appearance-none"
+              className="flex-1 min-w-0 px-3 py-2.5 bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 appearance-none"
             >
               <option value="">All Priorities</option>
               <option value="high">High</option>
@@ -275,20 +275,20 @@ export function PersonalDashboard() {
             {!isCreatingList ? (
               <button
                 onClick={() => setIsCreatingList(true)}
-                className="w-full h-28 border-2 border-dashed border-slate-700 rounded-lg text-slate-500 hover:border-slate-500 hover:text-slate-400 transition-all duration-200 flex flex-col items-center justify-center space-y-2"
+                className="w-full h-28 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg text-slate-400 dark:text-slate-500 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-500 dark:hover:text-slate-400 transition-all duration-200 flex flex-col items-center justify-center space-y-2"
               >
                 <Plus className="w-6 h-6" />
                 <span className="text-sm font-medium">{t('personal.createList')}</span>
               </button>
             ) : (
-              <div className="bg-slate-800 rounded-lg shadow-md p-3">
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md p-3">
                 <form onSubmit={handleCreateList} className="space-y-2">
                   <input
                     type="text"
                     value={newListTitle}
                     onChange={(e) => setNewListTitle(e.target.value)}
                     placeholder="List title..."
-                    className="w-full p-2 text-sm border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-700 text-white"
+                    className="w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-slate-800 dark:text-white"
                     autoFocus
                   />
                   <div className="flex space-x-2">
@@ -301,7 +301,7 @@ export function PersonalDashboard() {
                     <button
                       type="button"
                       onClick={() => { setIsCreatingList(false); setNewListTitle(''); }}
-                      className="flex-1 bg-slate-600 hover:bg-slate-500 text-slate-200 p-2 text-sm rounded-lg transition-colors"
+                      className="flex-1 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200 p-2 text-sm rounded-lg transition-colors"
                     >
                       {t('common.cancel')}
                     </button>
