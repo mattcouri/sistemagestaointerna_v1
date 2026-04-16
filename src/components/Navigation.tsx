@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User as UserIcon, FolderOpen, LogOut, Sun, Moon, Lightbulb, Languages, Bell, Shield } from 'lucide-react';
+import { User as UserIcon, FolderOpen, LogOut, Sun, Moon, Lightbulb, Languages, Bell, Settings } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useApp } from '../contexts/AppContext';
@@ -88,19 +88,6 @@ export function Navigation({ currentView, onViewChange, currentUser }: Navigatio
               <span>{t('nav.devRoadmap')}</span>
             </button>
 
-            {currentUser.is_admin && (
-              <button
-                onClick={() => onViewChange('admin')}
-                className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 text-sm ${
-                  currentView === 'admin'
-                    ? 'bg-slate-800 dark:bg-slate-600 text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
-                }`}
-              >
-                <Shield className="w-4 h-4" />
-                <span>Admin</span>
-              </button>
-            )}
           </div>
         </div>
 
@@ -147,6 +134,20 @@ export function Navigation({ currentView, onViewChange, currentUser }: Navigatio
           >
             {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
+
+          {currentUser.is_admin && (
+            <button
+              onClick={() => onViewChange('admin')}
+              className={`p-2 rounded-lg transition-colors ${
+                currentView === 'admin'
+                  ? 'bg-slate-800 dark:bg-slate-600 text-white'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+              title="Admin Panel"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
 
           <button
             onClick={logout}
