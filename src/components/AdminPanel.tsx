@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Shield, Users, Building2, Plus, Trash2, CreditCard as Edit2, Check, X, Crown, Search, UserMinus } from 'lucide-react';
+import { Shield, Users, Building2, Plus, Trash2, CreditCard as Edit2, Check, X, Crown, Search, UserMinus, UserPlus, Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { supabase } from '../lib/supabase';
 import { User, Organization } from '../types';
 
 type AdminTab = 'users' | 'organizations';
@@ -29,6 +30,12 @@ export function AdminPanel() {
   const [editOrgForm, setEditOrgForm] = useState({ name: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [addUserForm, setAddUserForm] = useState({ name: '', email: '', password: '', color: '#3B82F6' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [addUserError, setAddUserError] = useState<string | null>(null);
+  const [addUserSaving, setAddUserSaving] = useState(false);
 
   if (!currentUser?.is_admin) {
     return (
@@ -110,6 +117,43 @@ export function AdminPanel() {
       setError(e.message || 'Failed to delete user');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAddUser = async () => {
+    if (!addUserForm.name.trim() || !addUserForm.email.trim() || !addUserForm.password.trim()) {
+      setAddUserError('Name, email, and password are required');
+      return;
+    }
+    setAddUserSaving(true);
+    setAddUserError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            email: addUserForm.email.trim(),
+            password: addUserForm.password,
+            name: addUserForm.name.trim(),
+            color: addUserForm.color,
+          }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to create user');
+      setShowAddUser(false);
+      setAddUserForm({ name: '', email: '', password: '', color: '#3B82F6' });
+      setShowPassword(false);
+    } catch (e: any) {
+      setAddUserError(e.message || 'Failed to create user');
+    } finally {
+      setAddUserSaving(false);
     }
   };
 
@@ -212,16 +256,118 @@ export function AdminPanel() {
 
         {activeTab === 'users' && (
           <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search users by name or email..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              />
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search users by name or email..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+              <button
+                onClick={() => { setShowAddUser(true); setAddUserError(null); }}
+                className="flex items-center space-x-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Add User</span>
+              </button>
             </div>
+
+            {showAddUser && (
+              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-slate-800 dark:text-white text-sm">New User</h3>
+                  <button onClick={() => { setShowAddUser(false); setAddUserError(null); }} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {addUserError && (
+                  <div className="mb-3 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg text-red-600 dark:text-red-400 text-xs">
+                    {addUserError}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Name</label>
+                    <input
+                      type="text"
+                      value={addUserForm.name}
+                      onChange={e => setAddUserForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="Full name"
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={addUserForm.email}
+                      onChange={e => setAddUserForm(f => ({ ...f, email: e.target.value }))}
+                      placeholder="email@example.com"
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Password</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={addUserForm.password}
+                        onChange={e => setAddUserForm(f => ({ ...f, password: e.target.value }))}
+                        placeholder="Temporary password"
+                        className="w-full px-3 py-2 pr-9 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(v => !v)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Color</label>
+                    <div className="flex items-center space-x-1 pt-1">
+                      {COLOR_OPTIONS.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => setAddUserForm(f => ({ ...f, color: c }))}
+                          className={`w-6 h-6 rounded-full transition-transform ${addUserForm.color === c ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : ''}`}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 mt-4">
+                  <button
+                    onClick={() => { setShowAddUser(false); setAddUserError(null); }}
+                    className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddUser}
+                    disabled={addUserSaving}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors flex items-center space-x-2"
+                  >
+                    {addUserSaving ? (
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <UserPlus className="w-4 h-4" />
+                    )}
+                    <span>{addUserSaving ? 'Creating...' : 'Create User'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden">
               <table className="w-full">
