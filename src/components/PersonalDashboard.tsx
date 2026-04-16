@@ -8,7 +8,7 @@ import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
 import { AddTaskModal } from './AddTaskModal';
 
 export function PersonalDashboard() {
-  const { currentUser, createList, lists, allProfiles, projects, moveTask } = useApp();
+  const { currentUser, createList, lists, allProfiles, projects, moveTask, reorderLists } = useApp();
   const { t } = useLanguage();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -27,6 +27,7 @@ export function PersonalDashboard() {
   } = useDragAndDrop();
   const {
     draggedList,
+    dropTargetIndex,
     handleListDragStart,
     handleListDragEnd,
     handleListDragOver,
@@ -87,7 +88,10 @@ export function PersonalDashboard() {
   };
 
   const handleListReorder = (sourceIndex: number, targetIndex: number) => {
-    console.log('List reorder:', sourceIndex, targetIndex);
+    const newOrder = [...allPersonalLists];
+    const [moved] = newOrder.splice(sourceIndex, 1);
+    newOrder.splice(targetIndex, 0, moved);
+    reorderLists(currentUser.id, newOrder.map(l => l.id));
   };
 
   const firstListId = allPersonalLists[0]?.id;
@@ -228,25 +232,34 @@ export function PersonalDashboard() {
           {filteredLists.map((list, index) => (
             <div
               key={list.id}
-              draggable
-              onDragStart={() => handleListDragStart(list.id, index)}
-              onDragEnd={handleListDragEnd}
-              onDragOver={handleListDragOver}
-              onDrop={(e) => handleListDrop(e, index, handleListReorder)}
-              className={`transition-opacity ${draggedList?.listId === list.id ? 'opacity-50' : ''}`}
+              className="flex items-stretch"
             >
-              <ListColumn
-                list={list}
-                draggedTask={draggedTask}
-                dropTarget={dropTarget}
-                onTaskDragStart={handleDragStart}
-                onTaskDragEnd={handleDragEnd}
-                onTaskDragOver={handleTaskDragOver}
-                onListAreaDragOver={handleListAreaDragOver}
-                onDrop={handleDrop}
-                isPersonalDashboard={true}
-                projectUsers={list.type === 'project' && list.project_id ? allProfiles : undefined}
-              />
+              {dropTargetIndex === index && draggedList && draggedList.listId !== list.id && (
+                <div className="w-1 rounded-full bg-blue-400 mr-3 my-1 flex-shrink-0 animate-pulse" />
+              )}
+              <div
+                draggable
+                onDragStart={(e) => { e.stopPropagation(); handleListDragStart(list.id, index); }}
+                onDragEnd={handleListDragEnd}
+                onDragOver={(e) => handleListDragOver(e, index)}
+                onDrop={(e) => handleListDrop(e, index, handleListReorder)}
+                className={`transition-all duration-150 cursor-grab active:cursor-grabbing ${
+                  draggedList?.listId === list.id ? 'opacity-40 scale-95' : ''
+                }`}
+              >
+                <ListColumn
+                  list={list}
+                  draggedTask={draggedTask}
+                  dropTarget={dropTarget}
+                  onTaskDragStart={handleDragStart}
+                  onTaskDragEnd={handleDragEnd}
+                  onTaskDragOver={handleTaskDragOver}
+                  onListAreaDragOver={handleListAreaDragOver}
+                  onDrop={handleDrop}
+                  isPersonalDashboard={true}
+                  projectUsers={list.type === 'project' && list.project_id ? allProfiles : undefined}
+                />
+              </div>
             </div>
           ))}
 

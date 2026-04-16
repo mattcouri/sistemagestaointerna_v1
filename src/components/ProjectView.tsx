@@ -26,12 +26,13 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
     handleTaskDragOver,
     handleListAreaDragOver,
   } = useDragAndDrop();
-  const { 
-    draggedList, 
-    handleListDragStart, 
-    handleListDragEnd, 
-    handleListDragOver, 
-    handleListDrop 
+  const {
+    draggedList,
+    dropTargetIndex,
+    handleListDragStart,
+    handleListDragEnd,
+    handleListDragOver,
+    handleListDrop
   } = useListDragAndDrop();
 
   const projectLists = getProjectLists(project.id);
@@ -129,24 +130,33 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
           {projectLists.map((list, index) => (
             <div
               key={list.id}
-              draggable
-              onDragStart={() => handleListDragStart(list.id, index)}
-              onDragEnd={handleListDragEnd}
-              onDragOver={handleListDragOver}
-              onDrop={(e) => handleListDrop(e, index, handleListReorder)}
-              className={`transition-opacity ${draggedList?.listId === list.id ? 'opacity-50' : ''}`}
+              className="flex items-stretch"
             >
-            <ListColumn
-              list={list}
-              draggedTask={draggedTask}
-              dropTarget={dropTarget}
-              onTaskDragStart={handleDragStart}
-              onTaskDragEnd={handleDragEnd}
-              onTaskDragOver={handleTaskDragOver}
-              onListAreaDragOver={handleListAreaDragOver}
-              onDrop={handleDrop}
-              projectUsers={projectUsers}
-            />
+              {dropTargetIndex === index && draggedList && draggedList.listId !== list.id && (
+                <div className="w-1 rounded-full bg-blue-400 mr-3 my-1 flex-shrink-0 animate-pulse" />
+              )}
+              <div
+                draggable
+                onDragStart={(e) => { e.stopPropagation(); handleListDragStart(list.id, index); }}
+                onDragEnd={handleListDragEnd}
+                onDragOver={(e) => handleListDragOver(e, index)}
+                onDrop={(e) => handleListDrop(e, index, handleListReorder)}
+                className={`transition-all duration-150 cursor-grab active:cursor-grabbing ${
+                  draggedList?.listId === list.id ? 'opacity-40 scale-95' : ''
+                }`}
+              >
+                <ListColumn
+                  list={list}
+                  draggedTask={draggedTask}
+                  dropTarget={dropTarget}
+                  onTaskDragStart={handleDragStart}
+                  onTaskDragEnd={handleDragEnd}
+                  onTaskDragOver={handleTaskDragOver}
+                  onListAreaDragOver={handleListAreaDragOver}
+                  onDrop={handleDrop}
+                  projectUsers={projectUsers}
+                />
+              </div>
             </div>
           ))}
 
