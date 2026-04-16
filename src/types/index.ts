@@ -52,6 +52,7 @@ export interface Project {
   description: string;
   color: string;
   created_by: string;
+  organization_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -64,6 +65,14 @@ export interface User {
   color: string;
   is_admin?: boolean;
   organization_id?: string | null;
+  organization_ids?: string[];
+}
+
+export interface UserOrganization {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  created_at: string;
 }
 
 export interface Organization {

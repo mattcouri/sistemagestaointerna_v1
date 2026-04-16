@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Shield, Users, Building2, Plus, Trash2, CreditCard as Edit2, Check, X, ChevronDown, Crown, UserCheck, UserX, Search, Settings } from 'lucide-react';
+import { Shield, Users, Building2, Plus, Trash2, CreditCard as Edit2, Check, X, Crown, Search, UserMinus } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import { useLanguage } from '../contexts/LanguageContext';
 import { User, Organization } from '../types';
 
 type AdminTab = 'users' | 'organizations';
@@ -14,9 +13,8 @@ const COLOR_OPTIONS = [
 export function AdminPanel() {
   const {
     allProfiles, organizations, currentUser,
-    updateProfile, setUserAdmin, assignUserToOrganization,
+    updateProfile, setUserAdmin, setUserOrganizations, deleteUser,
     createOrganization, updateOrganization, deleteOrganization,
-    refreshData,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
@@ -25,8 +23,8 @@ export function AdminPanel() {
   const [editingOrg, setEditingOrg] = useState<string | null>(null);
   const [newOrgName, setNewOrgName] = useState('');
   const [showNewOrgForm, setShowNewOrgForm] = useState(false);
-  const [editUserForm, setEditUserForm] = useState<{ name: string; color: string; organization_id: string | null }>({
-    name: '', color: '#3B82F6', organization_id: null,
+  const [editUserForm, setEditUserForm] = useState<{ name: string; color: string; organization_ids: string[] }>({
+    name: '', color: '#3B82F6', organization_ids: [],
   });
   const [editOrgForm, setEditOrgForm] = useState({ name: '' });
   const [saving, setSaving] = useState(false);
@@ -52,7 +50,7 @@ export function AdminPanel() {
     setEditUserForm({
       name: user.name,
       color: user.color,
-      organization_id: user.organization_id ?? null,
+      organization_ids: user.organization_ids || [],
     });
     setError(null);
   };
@@ -62,17 +60,24 @@ export function AdminPanel() {
     setError(null);
   };
 
+  const toggleOrgInForm = (orgId: string) => {
+    setEditUserForm(f => {
+      const has = f.organization_ids.includes(orgId);
+      return {
+        ...f,
+        organization_ids: has
+          ? f.organization_ids.filter(id => id !== orgId)
+          : [...f.organization_ids, orgId],
+      };
+    });
+  };
+
   const saveUser = async (userId: string) => {
     setSaving(true);
     setError(null);
     try {
-      await updateProfile(userId, {
-        name: editUserForm.name,
-        color: editUserForm.color,
-      });
-      if (editUserForm.organization_id !== allProfiles.find(p => p.id === userId)?.organization_id) {
-        await assignUserToOrganization(userId, editUserForm.organization_id);
-      }
+      await updateProfile(userId, { name: editUserForm.name, color: editUserForm.color });
+      await setUserOrganizations(userId, editUserForm.organization_ids);
       setEditingUser(null);
     } catch (e: any) {
       setError(e.message || 'Failed to save changes');
@@ -89,6 +94,20 @@ export function AdminPanel() {
       await setUserAdmin(user.id, !user.is_admin);
     } catch (e: any) {
       setError(e.message || 'Failed to update admin status');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (user: User) => {
+    if (user.id === currentUser.id) return;
+    if (!confirm(`Delete user "${user.name}" (${user.email})? This cannot be undone.`)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await deleteUser(user.id);
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete user');
     } finally {
       setSaving(false);
     }
@@ -141,9 +160,10 @@ export function AdminPanel() {
     }
   };
 
-  const getOrgName = (orgId: string | null | undefined) => {
-    if (!orgId) return 'No organization';
-    return organizations.find(o => o.id === orgId)?.name ?? 'Unknown';
+  const getOrgNames = (user: User) => {
+    const ids = user.organization_ids || [];
+    if (ids.length === 0) return null;
+    return ids.map(id => organizations.find(o => o.id === id)?.name).filter(Boolean);
   };
 
   return (
@@ -208,7 +228,7 @@ export function AdminPanel() {
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-slate-700">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">User</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Organization</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Organizations</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Role</th>
                     <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Actions</th>
                   </tr>
@@ -217,48 +237,70 @@ export function AdminPanel() {
                   {filteredUsers.map(user => (
                     <tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                       {editingUser === user.id ? (
-                        <td colSpan={4} className="px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <input
-                              type="text"
-                              value={editUserForm.name}
-                              onChange={e => setEditUserForm(f => ({ ...f, name: e.target.value }))}
-                              className="flex-1 min-w-[150px] px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Name"
-                            />
-                            <div className="flex items-center space-x-1">
-                              {COLOR_OPTIONS.map(c => (
-                                <button
-                                  key={c}
-                                  onClick={() => setEditUserForm(f => ({ ...f, color: c }))}
-                                  className={`w-6 h-6 rounded-full transition-transform ${editUserForm.color === c ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : ''}`}
-                                  style={{ backgroundColor: c }}
-                                />
-                              ))}
+                        <td colSpan={4} className="px-4 py-4">
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <input
+                                type="text"
+                                value={editUserForm.name}
+                                onChange={e => setEditUserForm(f => ({ ...f, name: e.target.value }))}
+                                className="flex-1 min-w-[150px] px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Name"
+                              />
+                              <div className="flex items-center space-x-1">
+                                {COLOR_OPTIONS.map(c => (
+                                  <button
+                                    key={c}
+                                    onClick={() => setEditUserForm(f => ({ ...f, color: c }))}
+                                    className={`w-6 h-6 rounded-full transition-transform ${editUserForm.color === c ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : ''}`}
+                                    style={{ backgroundColor: c }}
+                                  />
+                                ))}
+                              </div>
                             </div>
-                            <select
-                              value={editUserForm.organization_id ?? ''}
-                              onChange={e => setEditUserForm(f => ({ ...f, organization_id: e.target.value || null }))}
-                              className="px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="">No organization</option>
-                              {organizations.map(org => (
-                                <option key={org.id} value={org.id}>{org.name}</option>
-                              ))}
-                            </select>
-                            <div className="flex items-center space-x-2 ml-auto">
+
+                            <div>
+                              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Organizations</p>
+                              {organizations.length === 0 ? (
+                                <p className="text-xs text-slate-400 italic">No organizations available. Create one first.</p>
+                              ) : (
+                                <div className="flex flex-wrap gap-2">
+                                  {organizations.map(org => {
+                                    const selected = editUserForm.organization_ids.includes(org.id);
+                                    return (
+                                      <button
+                                        key={org.id}
+                                        onClick={() => toggleOrgInForm(org.id)}
+                                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                                          selected
+                                            ? 'bg-blue-600 border-blue-600 text-white'
+                                            : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-blue-400'
+                                        }`}
+                                      >
+                                        {selected && <Check className="w-3 h-3 inline mr-1" />}
+                                        {org.name}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => saveUser(user.id)}
                                 disabled={saving}
-                                className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                                className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center space-x-1"
                               >
-                                <Check className="w-4 h-4" />
+                                <Check className="w-3 h-3" />
+                                <span>Save</span>
                               </button>
                               <button
                                 onClick={cancelEditUser}
-                                className="p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center space-x-1"
                               >
-                                <X className="w-4 h-4" />
+                                <X className="w-3 h-3" />
+                                <span>Cancel</span>
                               </button>
                             </div>
                           </div>
@@ -285,7 +327,21 @@ export function AdminPanel() {
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <span className="text-sm text-slate-600 dark:text-slate-300">{getOrgName(user.organization_id)}</span>
+                            {(() => {
+                              const names = getOrgNames(user);
+                              if (!names || names.length === 0) {
+                                return <span className="text-xs text-slate-400 dark:text-slate-500 italic">No organization</span>;
+                              }
+                              return (
+                                <div className="flex flex-wrap gap-1">
+                                  {names.map((name, i) => (
+                                    <span key={i} className="inline-block text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">
+                                      {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 py-3">
                             {user.is_admin ? (
@@ -321,6 +377,18 @@ export function AdminPanel() {
                                 title={user.is_admin ? 'Remove admin' : 'Make admin'}
                               >
                                 <Crown className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(user)}
+                                disabled={user.id === currentUser.id || saving}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  user.id === currentUser.id
+                                    ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                                    : 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+                                }`}
+                                title="Delete user"
+                              >
+                                <UserMinus className="w-4 h-4" />
                               </button>
                             </div>
                           </td>
@@ -390,7 +458,7 @@ export function AdminPanel() {
                 </div>
               ) : (
                 organizations.map(org => {
-                  const members = allProfiles.filter(p => p.organization_id === org.id);
+                  const members = allProfiles.filter(p => (p.organization_ids || []).includes(org.id));
                   return (
                     <div key={org.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden">
                       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">

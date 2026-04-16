@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useSupabase } from '../hooks/useSupabase';
 import { supabase } from '../lib/supabase';
 import { generateUniqueTag } from '../utils/taskUtils';
-import { User, Project, List, Task, RoadmapIdea, Organization, ProjectInvitation, ListMember } from '../types';
+import { User, Project, List, Task, RoadmapIdea, Organization, ProjectInvitation, ListMember, UserOrganization } from '../types';
 
 const PRESET_COLORS = [
   '#3B82F6', '#EF4444', '#10B981', '#F59E0B',
@@ -58,9 +58,11 @@ interface AppContextType {
   updateOrganization: (id: string, updates: Partial<Organization>) => Promise<void>;
   deleteOrganization: (id: string) => Promise<void>;
   assignUserToOrganization: (userId: string, organizationId: string | null) => Promise<void>;
+  setUserOrganizations: (userId: string, organizationIds: string[]) => Promise<void>;
 
   updateProfile: (userId: string, updates: Partial<User>) => Promise<void>;
   setUserAdmin: (userId: string, isAdmin: boolean) => Promise<void>;
+  deleteUser: (userId: string) => Promise<void>;
 
   refreshData: () => Promise<void>;
 }
@@ -120,7 +122,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDataLoading(true);
     try {
       const projectIdsStr = await getProjectIds(userId);
-      const [profileRes, projectsRes, listsRes, sharedListMembersRes, roadmapRes, orgsRes, invitationsRes, allProfilesRes] = await Promise.all([
+      const [profileRes, projectsRes, listsRes, sharedListMembersRes, roadmapRes, orgsRes, invitationsRes, allProfilesRes, userOrgsRes, allUserOrgsRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('projects').select('*, project_members!inner(user_id)').eq('project_members.user_id', userId),
         supabase.from('lists').select('*, tasks(*)').or(`user_id.eq.${userId},project_id.in.(${projectIdsStr})`).order('position'),
@@ -129,26 +131,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         supabase.from('organizations').select('*').order('name'),
         supabase.from('project_invitations').select('*, project:projects(*), inviter:profiles!project_invitations_invited_by_fkey(*)').eq('invited_user_id', userId).eq('status', 'pending'),
         supabase.from('profiles').select('*').order('name'),
+        supabase.from('user_organizations').select('organization_id').eq('user_id', userId),
+        supabase.from('user_organizations').select('user_id, organization_id'),
       ]);
 
-      if (profileRes.data) {
-        setCurrentUser(profileRes.data as User);
+      // Build a map of userId -> organization_ids[]
+      const userOrgMap: Record<string, string[]> = {};
+      if (allUserOrgsRes.data) {
+        for (const row of allUserOrgsRes.data as UserOrganization[]) {
+          if (!userOrgMap[row.user_id]) userOrgMap[row.user_id] = [];
+          userOrgMap[row.user_id].push(row.organization_id);
+        }
+      }
+
+      // Current user's org ids
+      const myOrgIds = (userOrgsRes.data || []).map((r: any) => r.organization_id as string);
+
+      const profileData = profileRes.data as User | null;
+      const isAdmin = profileData?.is_admin ?? false;
+
+      if (profileData) {
+        setCurrentUser({ ...profileData, organization_ids: myOrgIds });
       }
 
       if (projectsRes.data) {
-        setProjects(projectsRes.data as Project[]);
+        // Filter projects by org membership: show projects with no org, or projects whose org the user belongs to
+        const visibleProjects = (projectsRes.data as Project[]).filter(p =>
+          isAdmin || !p.organization_id || myOrgIds.includes(p.organization_id)
+        );
+        setProjects(visibleProjects);
       }
 
       // Fetch lists the user owns or is a project member of
       let ownedLists: List[] = [];
       if (listsRes.data) {
-        ownedLists = listsRes.data.map((l: any) => ({
-          ...l,
-          tasks: (l.tasks || []).map((t: any) => ({
-            ...t,
-            dueDate: t.due_date ? new Date(t.due_date) : undefined,
-          })),
-        }));
+        ownedLists = listsRes.data
+          .filter((l: any) => isAdmin || !l.organization_id || myOrgIds.includes(l.organization_id))
+          .map((l: any) => ({
+            ...l,
+            tasks: (l.tasks || []).map((t: any) => ({
+              ...t,
+              dueDate: t.due_date ? new Date(t.due_date) : undefined,
+            })),
+          }));
       }
 
       // Fetch shared lists (lists owned by others that this user is a member of)
@@ -163,13 +188,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             .select('*, tasks(*)')
             .in('id', newSharedIds);
           if (sharedData) {
-            sharedLists = sharedData.map((l: any) => ({
-              ...l,
-              tasks: (l.tasks || []).map((t: any) => ({
-                ...t,
-                dueDate: t.due_date ? new Date(t.due_date) : undefined,
-              })),
-            }));
+            sharedLists = sharedData
+              .filter((l: any) => isAdmin || !l.organization_id || myOrgIds.includes(l.organization_id))
+              .map((l: any) => ({
+                ...l,
+                tasks: (l.tasks || []).map((t: any) => ({
+                  ...t,
+                  dueDate: t.due_date ? new Date(t.due_date) : undefined,
+                })),
+              }));
           }
         }
       }
@@ -210,7 +237,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (allProfilesRes.data) {
-        setAllProfiles(allProfilesRes.data as User[]);
+        const profilesWithOrgs = (allProfilesRes.data as User[]).map(p => ({
+          ...p,
+          organization_ids: userOrgMap[p.id] || [],
+        }));
+        // Non-admins only see profiles from their own organizations (or themselves)
+        const visibleProfiles = isAdmin
+          ? profilesWithOrgs
+          : profilesWithOrgs.filter(p =>
+              p.id === userId ||
+              (userOrgMap[p.id] || []).some(orgId => myOrgIds.includes(orgId))
+            );
+        setAllProfiles(visibleProfiles);
       }
     } catch (err) {
       console.error('Error loading data:', err);
@@ -772,6 +810,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (currentUser?.id === userId) setCurrentUser(prev => prev ? { ...prev, organization_id: organizationId } : null);
   };
 
+  const setUserOrganizations = async (userId: string, organizationIds: string[]) => {
+    await supabase.from('user_organizations').delete().eq('user_id', userId);
+    if (organizationIds.length > 0) {
+      const { error } = await supabase.from('user_organizations').insert(
+        organizationIds.map(orgId => ({ user_id: userId, organization_id: orgId }))
+      );
+      if (error) throw error;
+    }
+    setAllProfiles(prev => prev.map(p => p.id === userId ? { ...p, organization_ids: organizationIds } : p));
+    if (currentUser?.id === userId) {
+      setCurrentUser(prev => prev ? { ...prev, organization_ids: organizationIds } : null);
+    }
+  };
+
   // ─── Admin: Profile Management ───────────────────────────────────────────────
 
   const updateProfile = async (userId: string, updates: Partial<User>) => {
@@ -787,6 +839,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setAllProfiles(prev => prev.map(p => p.id === userId ? { ...p, is_admin: isAdmin } : p));
   };
 
+  const deleteUser = async (userId: string) => {
+    await supabase.from('user_organizations').delete().eq('user_id', userId);
+    await supabase.from('project_members').delete().eq('user_id', userId);
+    await supabase.from('list_members').delete().eq('user_id', userId);
+    const { error } = await supabase.auth.admin.deleteUser(userId);
+    if (error) {
+      const { error: profileError } = await supabase.from('profiles').delete().eq('id', userId);
+      if (profileError) throw profileError;
+    }
+    setAllProfiles(prev => prev.filter(p => p.id !== userId));
+  };
+
   const value: AppContextType = {
     currentUser, projects, lists, roadmapIdeas, allProfiles, organizations, pendingInvitations,
     loading: authLoading || dataLoading,
@@ -800,8 +864,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addTaskToList, updateTask, deleteTask, moveTask, archiveCompletedTasks, unarchiveTask, bulkDeleteArchivedTasks,
     addRoadmapIdea, updateRoadmapIdea, deleteRoadmapIdea,
     inviteToProject, removeFromProject, acceptInvitation, declineInvitation,
-    createOrganization, updateOrganization, deleteOrganization, assignUserToOrganization,
-    updateProfile, setUserAdmin,
+    createOrganization, updateOrganization, deleteOrganization, assignUserToOrganization, setUserOrganizations,
+    updateProfile, setUserAdmin, deleteUser,
     refreshData,
   };
 
