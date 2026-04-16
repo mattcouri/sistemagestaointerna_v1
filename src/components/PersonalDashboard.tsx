@@ -16,6 +16,7 @@ export function PersonalDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
+  const [filterAssignee, setFilterAssignee] = useState('');
   const newListRef = useRef<HTMLDivElement>(null);
   const {
     draggedTask,
@@ -65,11 +66,12 @@ export function PersonalDashboard() {
       const filtered = (list.tasks || []).filter((task: any) => {
         const matchSearch = !searchQuery || task.title.toLowerCase().includes(searchQuery.toLowerCase());
         const matchPriority = !filterPriority || task.priority === filterPriority;
-        return matchSearch && matchPriority;
+        const matchAssignee = !filterAssignee || task.assigned_to === filterAssignee;
+        return matchSearch && matchPriority && matchAssignee;
       });
       return { ...list, tasks: filtered };
     });
-  }, [allPersonalLists, searchQuery, filterProject, filterPriority, currentUser]);
+  }, [allPersonalLists, searchQuery, filterProject, filterPriority, filterAssignee, currentUser]);
 
   const kpiTasks = useMemo(() =>
     filteredLists.flatMap(l => (l.tasks || []).map((t: any) => ({ ...t, _listId: l.id, _projectId: l.project_id }))),
@@ -250,6 +252,16 @@ export function PersonalDashboard() {
               <option value="medium">Medium</option>
               <option value="low">Low</option>
             </select>
+            <select
+              value={filterAssignee}
+              onChange={(e) => setFilterAssignee(e.target.value)}
+              className="flex-1 min-w-0 px-3 py-2.5 bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600/50 rounded-lg text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 appearance-none"
+            >
+              <option value="">All Members</option>
+              {allProfiles.map(u => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -335,6 +347,8 @@ export function PersonalDashboard() {
       {showNewTaskModal && firstListId && (
         <AddTaskModal
           listId={firstListId}
+          isPersonalDashboard={true}
+          defaultAssignee={filterProject === '__personal' || !filterProject ? currentUser.id : undefined}
           onClose={() => setShowNewTaskModal(false)}
         />
       )}

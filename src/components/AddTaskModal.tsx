@@ -7,6 +7,7 @@ interface AddTaskModalProps {
   listName?: string;
   projectUsers?: any[];
   isPersonalDashboard?: boolean;
+  defaultAssignee?: string;
   onClose: () => void;
 }
 
@@ -17,8 +18,8 @@ const PRIORITY_OPTIONS = [
   { value: 'high', label: 'High' },
 ];
 
-export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboard, onClose }: AddTaskModalProps) {
-  const { addTaskToList, projects, lists } = useApp();
+export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboard, defaultAssignee, onClose }: AddTaskModalProps) {
+  const { addTaskToList, projects, lists, allProfiles } = useApp();
 
   const currentList = lists.find(l => l.id === listId);
   const initialProjectId = currentList?.project_id || '';
@@ -33,7 +34,7 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
   const [goalDate, setGoalDate] = useState('');
   const [limitDate, setLimitDate] = useState('');
   const [priority, setPriority] = useState<'none' | 'low' | 'medium' | 'high'>('none');
-  const [assignee, setAssignee] = useState('');
+  const [assignee, setAssignee] = useState(defaultAssignee || '');
   const [selectedProject, setSelectedProject] = useState(initialProjectId);
   const [selectedListId, setSelectedListId] = useState(listId);
   const [submitting, setSubmitting] = useState(false);
@@ -298,21 +299,25 @@ export function AddTaskModal({ listId, listName, projectUsers, isPersonalDashboa
             )}
           </div>
 
-          {projectUsers && projectUsers.length > 0 && (
-            <div>
-              <label className={labelClass}>Assigned To</label>
-              <select
-                value={assignee}
-                onChange={(e) => setAssignee(e.target.value)}
-                className={selectClass}
-              >
-                <option value="">Unassigned</option>
-                {projectUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+          {(() => {
+            const users = projectUsers && projectUsers.length > 0 ? projectUsers : isPersonalDashboard ? allProfiles : [];
+            if (users.length === 0) return null;
+            return (
+              <div>
+                <label className={labelClass}>Assigned To</label>
+                <select
+                  value={assignee}
+                  onChange={(e) => setAssignee(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="">Unassigned</option>
+                  {users.map((u: any) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })()}
 
           <div className="flex gap-3 pt-2">
             <button
