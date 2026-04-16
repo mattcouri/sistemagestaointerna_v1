@@ -23,7 +23,8 @@ Deno.serve(async (req: Request) => {
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
     const supabaseClient = createClient(
@@ -62,10 +63,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const finalColor = color || "#3B82F6";
+
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
+      user_metadata: { name, color: finalColor },
     });
 
     if (createError) {
@@ -75,27 +79,33 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .upsert({
-        id: newUser.user.id,
-        email,
-        name,
-        color: color || "#3B82F6",
-        is_admin: false,
-      });
+    const userId = newUser.user.id;
 
-    if (profileError) {
-      return new Response(JSON.stringify({ error: profileError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Update the profile the trigger created (trigger uses ON CONFLICT DO NOTHING,
+    // so we need an explicit update to set the correct name and color)
+    const { error: updateError } = await supabaseAdmin
+      .from("profiles")
+      .update({ name, color: finalColor, email })
+      .eq("id", userId);
+
+    if (updateError) {
+      // Profile may not exist yet if trigger hasn't fired — try insert
+      const { error: insertError } = await supabaseAdmin
+        .from("profiles")
+        .insert({ id: userId, email, name, color: finalColor, is_admin: false });
+
+      if (insertError) {
+        return new Response(JSON.stringify({ error: insertError.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
-    return new Response(JSON.stringify({ user: { id: newUser.user.id, email, name, color: color || "#3B82F6" } }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ user: { id: userId, email, name, color: finalColor } }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message || "Unexpected error" }), {
       status: 500,
