@@ -107,12 +107,24 @@ export function ListColumn({
                   className="flex-1 text-base font-bold text-white bg-transparent border-b border-slate-500 focus:outline-none focus:border-blue-400"
                   autoFocus
                 />
+              ) : project ? (
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider truncate leading-tight">
+                    {project.name}
+                  </p>
+                  <h3
+                    className={`${compact ? 'text-sm' : 'text-base'} font-bold text-white truncate cursor-pointer leading-tight`}
+                    onClick={() => !compact && isOwner && setEditingTitle(true)}
+                  >
+                    {list.title}
+                  </h3>
+                </div>
               ) : (
                 <h3
                   className={`${compact ? 'text-sm' : 'text-base'} font-bold text-white flex-1 truncate cursor-pointer`}
                   onClick={() => !compact && isOwner && setEditingTitle(true)}
                 >
-                  {isPersonalDashboard && project ? project.name : list.title}
+                  {list.title}
                 </h3>
               )}
             </div>
