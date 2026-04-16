@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useSupabase } from '../hooks/useSupabase';
 import { supabase } from '../lib/supabase';
 import { generateUniqueTag } from '../utils/taskUtils';
-import { User, Project, List, Task, RoadmapIdea, Organization, ProjectInvitation } from '../types';
+import { User, Project, List, Task, RoadmapIdea, Organization, ProjectInvitation, ListMember } from '../types';
 
 const PRESET_COLORS = [
   '#3B82F6', '#EF4444', '#10B981', '#F59E0B',
@@ -35,6 +35,7 @@ interface AppContextType {
   deleteList: (id: string) => Promise<void>;
   reorderLists: (userId: string, listIds: string[]) => Promise<void>;
   reorderProjectLists: (projectId: string, listIds: string[]) => Promise<void>;
+  shareList: (listId: string, userIds: string[]) => Promise<void>;
 
   addTaskToList: (listId: string, taskData: any) => Promise<void>;
   updateTask: (listId: string, taskId: string, updates: any) => Promise<void>;
@@ -115,10 +116,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const loadSupabaseData = useCallback(async (userId: string) => {
     setDataLoading(true);
     try {
-      const [profileRes, projectsRes, listsRes, roadmapRes, orgsRes, invitationsRes, allProfilesRes] = await Promise.all([
+      const projectIdsStr = await getProjectIds(userId);
+      const [profileRes, projectsRes, listsRes, sharedListMembersRes, roadmapRes, orgsRes, invitationsRes, allProfilesRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('projects').select('*, project_members!inner(user_id)').eq('project_members.user_id', userId),
-        supabase.from('lists').select('*, tasks(*)').or(`user_id.eq.${userId},project_id.in.(${await getProjectIds(userId)})`).order('position'),
+        supabase.from('lists').select('*, tasks(*)').or(`user_id.eq.${userId},project_id.in.(${projectIdsStr})`).order('position'),
+        supabase.from('list_members').select('list_id').eq('user_id', userId),
         supabase.from('roadmap_ideas').select('*').order('created_at', { ascending: false }),
         supabase.from('organizations').select('*').order('name'),
         supabase.from('project_invitations').select('*, project:projects(*), inviter:profiles!project_invitations_invited_by_fkey(*)').eq('invited_user_id', userId).eq('status', 'pending'),
@@ -133,16 +136,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setProjects(projectsRes.data as Project[]);
       }
 
+      // Fetch lists the user owns or is a project member of
+      let ownedLists: List[] = [];
       if (listsRes.data) {
-        const mappedLists: List[] = listsRes.data.map((l: any) => ({
+        ownedLists = listsRes.data.map((l: any) => ({
           ...l,
           tasks: (l.tasks || []).map((t: any) => ({
             ...t,
             dueDate: t.due_date ? new Date(t.due_date) : undefined,
           })),
         }));
-        setLists(mappedLists);
       }
+
+      // Fetch shared lists (lists owned by others that this user is a member of)
+      let sharedLists: List[] = [];
+      if (sharedListMembersRes.data && sharedListMembersRes.data.length > 0) {
+        const sharedListIds = sharedListMembersRes.data.map((m: any) => m.list_id);
+        const ownedListIds = new Set(ownedLists.map(l => l.id));
+        const newSharedIds = sharedListIds.filter((id: string) => !ownedListIds.has(id));
+        if (newSharedIds.length > 0) {
+          const { data: sharedData } = await supabase
+            .from('lists')
+            .select('*, tasks(*)')
+            .in('id', newSharedIds);
+          if (sharedData) {
+            sharedLists = sharedData.map((l: any) => ({
+              ...l,
+              tasks: (l.tasks || []).map((t: any) => ({
+                ...t,
+                dueDate: t.due_date ? new Date(t.due_date) : undefined,
+              })),
+            }));
+          }
+        }
+      }
+
+      // Fetch list_members for all visible lists to populate shared_with
+      const allVisibleLists = [...ownedLists, ...sharedLists];
+      const allListIds = allVisibleLists.map(l => l.id);
+      let listMembersMap: Record<string, string[]> = {};
+      if (allListIds.length > 0) {
+        const { data: membersData } = await supabase
+          .from('list_members')
+          .select('list_id, user_id')
+          .in('list_id', allListIds);
+        if (membersData) {
+          for (const m of membersData) {
+            if (!listMembersMap[m.list_id]) listMembersMap[m.list_id] = [];
+            listMembersMap[m.list_id].push(m.user_id);
+          }
+        }
+      }
+
+      const mappedLists: List[] = allVisibleLists.map(l => ({
+        ...l,
+        shared_with: listMembersMap[l.id] || [],
+      }));
+      setLists(mappedLists);
 
       if (roadmapRes.data) {
         setRoadmapIdeas(roadmapRes.data as RoadmapIdea[]);
@@ -421,6 +471,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const shareList = async (listId: string, userIds: string[]) => {
+    if (isGuest || !currentUser) return;
+
+    // Remove all existing members then re-add
+    await supabase.from('list_members').delete().eq('list_id', listId);
+
+    if (userIds.length > 0) {
+      await supabase.from('list_members').insert(
+        userIds.map(uid => ({ list_id: listId, user_id: uid }))
+      );
+      await supabase.from('lists').update({ is_shared: true }).eq('id', listId);
+    } else {
+      await supabase.from('lists').update({ is_shared: false }).eq('id', listId);
+    }
+
+    setLists(prev => prev.map(l =>
+      l.id === listId
+        ? { ...l, is_shared: userIds.length > 0, shared_with: userIds }
+        : l
+    ));
+  };
+
   // ─── Tasks ───────────────────────────────────────────────────────────────────
 
   const addTaskToList = async (listId: string, taskData: any) => {
@@ -624,7 +696,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     logout,
 
     createProject, updateProject, deleteProject, getProjectLists, getUsersInProject, getProjectMembers,
-    createList, updateList, deleteList, reorderLists, reorderProjectLists,
+    createList, updateList, deleteList, reorderLists, reorderProjectLists, shareList,
     addTaskToList, updateTask, deleteTask, moveTask,
     addRoadmapIdea, updateRoadmapIdea, deleteRoadmapIdea,
     inviteToProject, removeFromProject, acceptInvitation, declineInvitation,

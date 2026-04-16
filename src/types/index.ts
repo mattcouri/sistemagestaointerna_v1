@@ -21,6 +21,13 @@ export interface Task {
   updated_at: string;
 }
 
+export interface ListMember {
+  id: string;
+  list_id: string;
+  user_id: string;
+  created_at: string;
+}
+
 export interface List {
   id: string;
   title: string;
@@ -31,6 +38,8 @@ export interface List {
   user_id: string;
   color?: string;
   position: number;
+  is_shared?: boolean;
+  shared_with?: string[];
   created_at: string;
   updated_at: string;
 }
