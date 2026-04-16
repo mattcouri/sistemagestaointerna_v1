@@ -1,70 +1,58 @@
 import React, { useState } from 'react';
-import { Plus, Target, Lock, FolderOpen, MoreVertical, User } from 'lucide-react';
+import { Plus, Target, Lock, FolderOpen, MoreVertical, Share2, Archive as ArchiveIcon } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { TaskItem } from './TaskItem';
+import { AddTaskModal } from './AddTaskModal';
+import { ShareListModal } from './ShareListModal';
 
 interface ListColumnProps {
-  list: any; // Using any since List type has mismatches
-  onDragStart: (task: any, sourceListId: string) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, targetListId: string) => void;
+  list: any;
+  draggedTask: { task: any; sourceListId: string } | null;
+  dropTarget: { listId: string; index: number } | null;
+  onTaskDragStart: (task: any, sourceListId: string) => void;
+  onTaskDragEnd: () => void;
+  onTaskDragOver: (e: React.DragEvent, listId: string, index: number) => void;
+  onListAreaDragOver: (e: React.DragEvent, listId: string, taskCount: number) => void;
+  onDrop: (e: React.DragEvent, targetListId: string, targetIndex?: number) => void;
   compact?: boolean;
   projectUsers?: any[];
   isPersonalDashboard?: boolean;
 }
 
-export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = false, projectUsers, isPersonalDashboard = false }: ListColumnProps) {
-  const { updateList, addTaskToList, deleteList, projects, getProjectLists } = useApp();
+export function ListColumn({
+  list,
+  draggedTask,
+  dropTarget,
+  onTaskDragStart,
+  onTaskDragEnd,
+  onTaskDragOver,
+  onListAreaDragOver,
+  onDrop,
+  compact = false,
+  projectUsers,
+  isPersonalDashboard = false,
+}: ListColumnProps) {
+  const { updateList, deleteList, projects, allProfiles, currentUser, archiveCompletedTasks } = useApp();
   const { t } = useLanguage();
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskPriority, setNewTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
-  const [newTaskAssignee, setNewTaskAssignee] = useState<string>('');
-  const [newTaskDueDate, setNewTaskDueDate] = useState<string>('');
-  const [selectedTargetList, setSelectedTargetList] = useState<string>('');
+  const [showShareModal, setShowShareModal] = useState(false);
   const [editingStrategy, setEditingStrategy] = useState(false);
   const [strategyText, setStrategyText] = useState(list.strategy || '');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(list.title);
 
-  // Get project info if this is a project list
-  const project = list.project_id ? projects.find(p => p.id === list.project_id) : null;
-  const projectLists = list.project_id ? getProjectLists(list.project_id) : [];
-  
-  // Set default target list when adding task
-  React.useEffect(() => {
-    if (isAddingTask && list.project_id && !selectedTargetList) {
-      setSelectedTargetList(list.id);
-    }
-  }, [isAddingTask, list.project_id, list.id, selectedTargetList]);
+  const project = list.project_id ? projects.find((p: any) => p.id === list.project_id) : null;
 
-  const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newTaskTitle.trim()) {
-      const targetListId = isPersonalDashboard && list.project_id && selectedTargetList 
-        ? selectedTargetList 
-        : list.id;
-        
-      // Convert date string to ISO format for Supabase
-      const taskData: any = {
-        title: newTaskTitle.trim(),
-        priority: newTaskPriority,
-        completed: false,
-        position: (list.tasks?.length || 0),
-        assigned_to: newTaskAssignee || undefined,
-        due_date: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : undefined
-      };
+  const isShared = !!(list.is_shared || (list.shared_with && list.shared_with.length > 0));
+  const isOwner = list.user_id === currentUser?.id;
+  const sharedWithUsers = (list.shared_with || [])
+    .map((uid: string) => allProfiles.find((u: any) => u.id === uid))
+    .filter(Boolean);
 
-      addTaskToList(targetListId, taskData);
-      setNewTaskTitle('');
-      setNewTaskAssignee('');
-      setNewTaskDueDate('');
-      setSelectedTargetList('');
-      setIsAddingTask(false);
-    }
-  };
+  const tasks: any[] = list.tasks || [];
+  const isDraggingOver = dropTarget?.listId === list.id;
 
   const handleUpdateStrategy = () => {
     updateList(list.id, { strategy: strategyText });
@@ -81,267 +69,308 @@ export function ListColumn({ list, onDragStart, onDragOver, onDrop, compact = fa
     }
   };
 
-  const completedTasks = (list.tasks || []).filter(task => task.completed).length;
-  const totalTasks = list.tasks?.length || 0;
+  const completedTasks = tasks.filter((task: any) => task.completed).length;
+  const archivableTasks = tasks.filter((task: any) => task.completed && !task.archived_at).length;
+
+  const handleArchiveCompleted = async () => {
+    if (archivableTasks === 0) return;
+    if (!confirm(`Move ${archivableTasks} completed task(s) to the archive?`)) return;
+    await archiveCompletedTasks(list.id);
+  };
+
+  const sharedBorderClass = isShared
+    ? 'border-2 border-blue-400/70 dark:border-blue-500/70 shadow-[0_0_12px_rgba(59,130,246,0.12)] dark:shadow-[0_0_12px_rgba(59,130,246,0.2)]'
+    : 'border border-slate-200 dark:border-slate-700/60';
+
+  const showDropIndicator = (index: number) =>
+    isDraggingOver && dropTarget?.index === index && !!draggedTask;
 
   return (
-    <div
-      className={`${compact ? 'w-56' : 'w-72'} flex-shrink-0 ${
-        list.type === 'project' 
-          ? 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700' 
-          : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'
-      } rounded-lg shadow-sm overflow-hidden`}
-      onDragOver={onDragOver}
-      onDrop={(e) => onDrop(e, list.id)}
-    >
-      {/* List Header */}
-      <div className={`${compact ? 'p-2' : 'p-3'} ${
-        list.type === 'project' 
-          ? 'bg-slate-50 dark:bg-slate-700/50' 
-          : 'bg-slate-50 dark:bg-slate-700/50'
-      } border-b border-slate-200 dark:border-slate-600`}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center space-x-2 flex-1">
-            {list.type === 'project' ? (
-              <FolderOpen className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-            ) : (
-              <Lock className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-            )}
-            
-            {editingTitle && !compact ? (
-              <input
-                value={titleText}
-                onChange={(e) => setTitleText(e.target.value)}
-                onBlur={handleUpdateTitle}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleUpdateTitle();
-                  } else if (e.key === 'Escape') {
-                    setTitleText(list.title);
-                    setEditingTitle(false);
-                  }
-                }}
-                className="flex-1 text-lg font-bold text-slate-800 dark:text-white bg-transparent border-b border-slate-300 focus:outline-none focus:border-blue-500"
-                autoFocus
-              />
-            ) : (
-              <h3 
-                className={`${compact ? 'text-sm' : 'text-lg'} font-bold text-slate-800 dark:text-white flex-1 cursor-pointer`}
-                onClick={() => !compact && setEditingTitle(true)}
-              >
-                {isPersonalDashboard && project ? project.name : list.title}
-              </h3>
+    <>
+      <div
+        className={`${compact ? 'w-56' : 'w-72'} flex-shrink-0 bg-white dark:bg-[#1e2535] ${sharedBorderClass} rounded-xl shadow-sm overflow-hidden`}
+      >
+        {/* List Header */}
+        <div className={`${compact ? 'p-2' : 'p-3'} ${isShared ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-slate-50 dark:bg-slate-800/50'} border-b border-slate-200 dark:border-slate-700/50`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2 flex-1 min-w-0">
+              {list.type === 'project' ? (
+                <FolderOpen className="w-4 h-4 text-blue-400 flex-shrink-0" />
+              ) : isShared ? (
+                <Share2 className="w-4 h-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
+              ) : (
+                <Lock className="w-4 h-4 text-slate-400 dark:text-slate-400 flex-shrink-0" />
+              )}
+
+              {editingTitle && !compact ? (
+                <input
+                  value={titleText}
+                  onChange={(e) => setTitleText(e.target.value)}
+                  onBlur={handleUpdateTitle}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleUpdateTitle();
+                    else if (e.key === 'Escape') { setTitleText(list.title); setEditingTitle(false); }
+                  }}
+                  className="flex-1 text-base font-bold text-slate-800 dark:text-white bg-transparent border-b border-slate-400 dark:border-slate-500 focus:outline-none focus:border-blue-500 dark:focus:border-blue-400"
+                  autoFocus
+                />
+              ) : project ? (
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-wider truncate leading-tight">
+                    {project.name}
+                  </p>
+                  <h3
+                    className={`${compact ? 'text-sm' : 'text-base'} font-bold text-slate-800 dark:text-white truncate cursor-pointer leading-tight`}
+                    onClick={() => !compact && isOwner && setEditingTitle(true)}
+                  >
+                    {list.title}
+                  </h3>
+                </div>
+              ) : (
+                <h3
+                  className={`${compact ? 'text-sm' : 'text-base'} font-bold text-slate-800 dark:text-white flex-1 truncate cursor-pointer`}
+                  onClick={() => !compact && isOwner && setEditingTitle(true)}
+                >
+                  {list.title}
+                </h3>
+              )}
+            </div>
+
+            {!compact && (
+              <div className="relative flex-shrink-0">
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className={`text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors p-1 rounded ${
+                    (isPersonalDashboard && list.type === 'project') ? 'hidden' : ''
+                  }`}
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+
+                {showMenu && (
+                  <div className="absolute right-0 top-7 bg-white dark:bg-[#1e2535] border border-slate-200 dark:border-slate-600/60 rounded-xl shadow-2xl z-20 min-w-40 overflow-hidden">
+                    {isOwner && (
+                      <button
+                        onClick={() => { setEditingTitle(true); setShowMenu(false); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors"
+                      >
+                        Rename List
+                      </button>
+                    )}
+                    {isOwner && (
+                      <button
+                        onClick={() => { setShowShareModal(true); setShowMenu(false); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors flex items-center gap-2"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        Share List
+                      </button>
+                    )}
+                    {isOwner && (
+                      <button
+                        onClick={() => {
+                          if (confirm('Delete this list? All tasks will be lost.')) deleteList(list.id);
+                          setShowMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                      >
+                        Delete List
+                      </button>
+                    )}
+                    {!isOwner && (
+                      <div className="px-4 py-2.5 text-xs text-slate-400 dark:text-slate-500 italic">Read-only (shared)</div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
-          
-          {!compact && (
-            <div className="relative">
-              <button 
-                onClick={() => setShowMenu(!showMenu)}
-                className={`text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors ${
-                  (isPersonalDashboard && list.type === 'project') ? 'hidden' : ''
-                }`}
-              >
-                <MoreVertical className="w-4 h-4" />
-              </button>
-              
-              {showMenu && (
-                <div className="absolute right-0 top-6 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-10 min-w-32">
-                  <button
-                    onClick={() => {
-                      setEditingTitle(true);
-                      setShowMenu(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
-                  >
-                    Rename List
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('Are you sure you want to delete this list? All tasks will be lost.')) {
-                        deleteList(list.id);
-                      }
-                      setShowMenu(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                  >
-                    Delete List
-                  </button>
+
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-2">
+              <span>{completedTasks}/{tasks.length} completed</span>
+              {!compact && archivableTasks > 0 && (
+                <button
+                  onClick={handleArchiveCompleted}
+                  title={`Archive ${archivableTasks} completed task(s)`}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors"
+                >
+                  <ArchiveIcon className="w-3 h-3" />
+                  Archive {archivableTasks}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {list.type === 'project' && (
+                <span className="px-2 py-0.5 bg-blue-600 text-white rounded-full font-medium text-[10px] uppercase tracking-wide">
+                  Project
+                </span>
+              )}
+              {isShared && list.type !== 'project' && (
+                <div className="flex items-center gap-1.5">
+                  <div className="flex -space-x-1">
+                    {sharedWithUsers.slice(0, 3).map((u: any) => (
+                      <div
+                        key={u.id}
+                        title={u.name}
+                        className="w-5 h-5 rounded-full border border-white dark:border-slate-800 flex items-center justify-center text-[9px] font-bold text-white"
+                        style={{ backgroundColor: u.color || '#3B82F6' }}
+                      >
+                        {u.name.charAt(0).toUpperCase()}
+                      </div>
+                    ))}
+                    {sharedWithUsers.length > 3 && (
+                      <div className="w-5 h-5 rounded-full border border-white dark:border-slate-800 bg-slate-400 dark:bg-slate-600 flex items-center justify-center text-[9px] text-white font-bold">
+                        +{sharedWithUsers.length - 3}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-blue-500 dark:text-blue-400 font-medium uppercase tracking-wide">Shared</span>
                 </div>
               )}
             </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
-          <span>{completedTasks}/{totalTasks} completed</span>
-          {list.type === 'project' && (
-            <span className="text-xs px-2 py-1 bg-blue-500 text-white dark:bg-blue-600 rounded-full font-medium shadow-sm">
-              SHARED
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Click outside to close menu */}
-      {showMenu && (
-        <div 
-          className="fixed inset-0 z-5" 
-          onClick={() => setShowMenu(false)}
-        />
-      )}
-
-      {/* Strategy Section */}
-      <div className={`${compact ? 'p-2' : 'p-3'} bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600`}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center space-x-2">
-            <Target className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-            <span className={`${compact ? 'text-xs' : 'text-xs'} font-medium text-blue-600 dark:text-blue-400`}>
-              Strategy
-            </span>
           </div>
-          {!compact && (
+        </div>
+
+        {showMenu && (
+          <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+        )}
+
+        {/* Strategy Section */}
+        <div className={`${compact ? 'p-2' : 'p-3'} bg-slate-50 dark:bg-[#1e2535] border-b border-slate-200 dark:border-slate-700/50`}>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center space-x-1.5">
+              <Target className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
+              <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Strategy</span>
+            </div>
+            {!compact && isOwner && (
+              <button
+                onClick={() => {
+                  if (editingStrategy) handleUpdateStrategy();
+                  else setEditingStrategy(true);
+                }}
+                className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                {editingStrategy ? 'Save' : 'Edit'}
+              </button>
+            )}
+          </div>
+
+          {editingStrategy && !compact ? (
+            <textarea
+              value={strategyText}
+              onChange={(e) => setStrategyText(e.target.value)}
+              className="w-full p-2 text-xs bg-slate-100 dark:bg-[#2a3347] text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600/50 rounded resize-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+              rows={2}
+              placeholder="Enter focus areas for this list..."
+            />
+          ) : (
+            <p className={`text-xs italic ${list.strategy ? 'text-slate-700 dark:text-slate-300 font-bold' : 'text-slate-400 dark:text-slate-500'}`}>
+              {list.strategy || 'No strategy set'}
+            </p>
+          )}
+        </div>
+
+        {/* Tasks Section */}
+        <div
+          className={`${compact ? 'p-2' : 'p-3'} bg-white dark:bg-[#1e2535] transition-colors ${
+            isDraggingOver && tasks.length === 0 ? 'bg-blue-50 dark:bg-blue-950/20' : ''
+          }`}
+          onDragOver={(e) => onListAreaDragOver(e, list.id, tasks.length)}
+          onDrop={(e) => { e.preventDefault(); onDrop(e, list.id, dropTarget?.listId === list.id ? dropTarget.index : undefined); }}
+        >
+          {!compact && !isAddingTask && (
             <button
-              onClick={() => {
-                if (editingStrategy) {
-                  handleUpdateStrategy();
-                } else {
-                  setEditingStrategy(true);
-                }
-              }}
-              className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+              onClick={() => setIsAddingTask(true)}
+              className="w-full p-2 mb-2 border-2 border-dashed rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-500 dark:hover:text-slate-400"
             >
-              {editingStrategy ? 'Save' : 'Edit'}
+              <Plus className="w-3 h-3" />
+              <span className="text-sm">Add Task</span>
             </button>
           )}
-        </div>
-        
-        {editingStrategy && !compact ? (
-          <textarea
-            value={strategyText}
-            onChange={(e) => setStrategyText(e.target.value)}
-            className="w-full p-2 text-xs bg-white dark:bg-slate-700 dark:text-white border border-slate-200 dark:border-slate-600 rounded resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            rows={2}
-            placeholder="Enter focus areas for this list..."
-          />
-        ) : (
-          <p className={`${compact ? 'text-xs' : 'text-xs'} text-slate-600 dark:text-slate-300 italic font-bold ${!list.strategy ? 'text-slate-400 dark:text-slate-500' : ''}`}>
-            {list.strategy || 'No strategy set'}
-          </p>
-        )}
-      </div>
 
-      {/* Tasks Section */}
-      <div className={`${compact ? 'p-2' : 'p-3'} flex-1 bg-white dark:bg-slate-800`}>
-        {!compact && !isAddingTask && (
-          <button
-            onClick={() => setIsAddingTask(true)}
-            className="w-full p-2 mb-2 border-2 border-dashed rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-          >
-            <Plus className="w-3 h-3" />
-            <span className="text-sm">Add Task</span>
-          </button>
-        )}
-
-        {isAddingTask && !compact && (
-          <form onSubmit={handleAddTask} className="space-y-2 mb-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600">
-            <input
-              type="text"
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              placeholder="Task title..."
-              className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
-              autoFocus
-            />
-            <select
-              value={newTaskPriority}
-              onChange={(e) => setNewTaskPriority(e.target.value as 'low' | 'medium' | 'high')}
-              className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
-            >
-              <option value="low">Low Priority</option>
-              <option value="medium">Medium Priority</option>
-              <option value="high">High Priority</option>
-            </select>
-            <input
-              type="date"
-              value={newTaskDueDate}
-              onChange={(e) => setNewTaskDueDate(e.target.value)}
-              className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
-              placeholder="Due date (optional)"
-            />
-            {isPersonalDashboard && list.project_id && projectLists.length > 1 && (
-              <select
-                value={selectedTargetList}
-                onChange={(e) => setSelectedTargetList(e.target.value)}
-                className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
-                required
-              >
-                <option value="">Select list...</option>
-                {projectLists.map(pList => (
-                  <option key={pList.id} value={pList.id}>
-                    {pList.title} ({pList.tasks?.length || 0} tasks)
-                  </option>
-                ))}
-              </select>
-            )}
-            {projectUsers && projectUsers.length > 0 && (
-              <select
-                value={newTaskAssignee}
-                onChange={(e) => setNewTaskAssignee(e.target.value)}
-                className="w-full p-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-600 dark:text-white"
-              >
-                <option value="">Unassigned</option>
-                {projectUsers.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <div className="flex space-x-2">
-              <button
-                type="submit"
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white p-2 text-sm rounded-lg transition-colors"
-              >
-                Create
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddingTask(false);
-                  setNewTaskTitle('');
-                  setNewTaskDueDate('');
-                }}
-                className="flex-1 bg-slate-300 hover:bg-slate-400 text-slate-700 p-2 text-sm rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* Task List */}
-        <div className={`space-y-${compact ? '1' : '1'}`}>
-          {(list.tasks || []).map((task: any) => (
-            <TaskItem
-              key={task.id}
-              task={task}
+          {isAddingTask && !compact && (
+            <AddTaskModal
               listId={list.id}
-              compact={compact}
+              listName={list.title}
               projectUsers={projectUsers}
-              onDragStart={(e) => onDragStart(task, list.id)}
+              isPersonalDashboard={isPersonalDashboard}
+              onClose={() => setIsAddingTask(false)}
             />
-          ))}
-          
-          {(list.tasks?.length || 0) === 0 && (
-            <div className={`${compact ? 'p-3 text-xs' : 'p-4 text-sm'} text-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-700/50 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-600`}>
-              <Target className={`${compact ? 'w-6 h-6' : 'w-8 h-8'} mx-auto mb-1 text-slate-300 dark:text-slate-500`} />
-              <p className="text-xs">No tasks yet</p>
-              {!compact && <p className="text-xs mt-1">Add a task to get started</p>}
-            </div>
           )}
+
+          <div className="space-y-0">
+            {/* Drop indicator at top */}
+            <DropLine visible={showDropIndicator(0)} />
+
+            {tasks.map((task: any, index: number) => (
+              <div
+                key={task.id}
+                onDragOver={(e) => {
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  const midY = rect.top + rect.height / 2;
+                  const insertIndex = e.clientY < midY ? index : index + 1;
+                  onTaskDragOver(e, list.id, insertIndex);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  const midY = rect.top + rect.height / 2;
+                  const insertIndex = e.clientY < midY ? index : index + 1;
+                  onDrop(e, list.id, insertIndex);
+                }}
+                className="relative"
+              >
+                <div className="mb-1">
+                  <TaskItem
+                    task={task}
+                    listId={list.id}
+                    compact={compact}
+                    projectUsers={projectUsers}
+                    isDragging={draggedTask?.task.id === task.id}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = 'move';
+                      onTaskDragStart(task, list.id);
+                    }}
+                    onDragEnd={onTaskDragEnd}
+                  />
+                </div>
+                <DropLine visible={showDropIndicator(index + 1)} />
+              </div>
+            ))}
+
+            {tasks.length === 0 && (
+              <div
+                className={`${compact ? 'p-3 text-xs' : 'p-4 text-sm'} text-center text-slate-500 rounded-lg border-2 border-dashed transition-colors ${
+                  isDraggingOver ? 'border-blue-400/60 bg-blue-50 dark:bg-blue-950/20 text-blue-500 dark:text-blue-400' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60 text-slate-400 dark:text-slate-500'
+                }`}
+              >
+                <Target className={`${compact ? 'w-6 h-6' : 'w-8 h-8'} mx-auto mb-1 ${isDraggingOver ? 'text-blue-500' : 'text-slate-400 dark:text-slate-600'}`} />
+                <p className="text-xs">{isDraggingOver ? 'Drop here' : 'No tasks yet'}</p>
+                {!compact && !isDraggingOver && <p className="text-xs mt-1 text-slate-400 dark:text-slate-600">Add a task to get started</p>}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {showShareModal && (
+        <ShareListModal
+          list={list}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function DropLine({ visible }: { visible: boolean }) {
+  return (
+    <div
+      className={`h-0.5 rounded-full mx-1 transition-all duration-150 ${
+        visible ? 'bg-blue-400 opacity-100 mb-1' : 'bg-transparent opacity-0 mb-0'
+      }`}
+    />
   );
 }

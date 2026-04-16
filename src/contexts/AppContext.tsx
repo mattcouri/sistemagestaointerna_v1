@@ -1,361 +1,425 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useSupabase } from '../hooks/useSupabase';
+import { supabase } from '../lib/supabase';
 import { generateUniqueTag } from '../utils/taskUtils';
+import { User, Project, List, Task, RoadmapIdea, Organization, ProjectInvitation, ListMember, UserOrganization } from '../types';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  color: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
-interface Project {
-  id: string;
-  name: string;
-  description: string;
-  color: string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface List {
-  id: string;
-  title: string;
-  strategy?: string;
-  type: 'personal' | 'project';
-  project_id?: string;
-  user_id: string;
-  color?: string;
-  position: number;
-  created_at: string;
-  updated_at: string;
-  tasks: Task[];
-}
-
-interface Task {
-  id: string;
-  tag: string;
-  title: string;
-  description?: string;
-  priority: 'low' | 'medium' | 'high';
-  completed: boolean;
-  list_id: string;
-  assigned_to?: string;
-  due_date?: string;
-  position: number;
-  created_at: string;
-  updated_at: string;
-  dueDate?: Date;
-}
-
-interface RoadmapIdea {
-  id: string;
-  title: string;
-  description: string;
-  category: 'new-feature' | 'improvement' | 'next-steps' | 'bug';
-  image_url?: string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
+const PRESET_COLORS = [
+  '#3B82F6', '#EF4444', '#10B981', '#F59E0B',
+  '#EC4899', '#06B6D4', '#84CC16'
+];
 
 interface AppContextType {
   currentUser: User | null;
   projects: Project[];
   lists: List[];
   roadmapIdeas: RoadmapIdea[];
+  allProfiles: User[];
+  organizations: Organization[];
+  pendingInvitations: ProjectInvitation[];
   loading: boolean;
   isAuthenticated: boolean;
-  
+  isGuest: boolean;
+  continueAsGuest: () => void;
+  logout: () => Promise<void>;
+
   createProject: (name: string, description: string, assignedUserIds: string[], color?: string) => Promise<void>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   getProjectLists: (projectId: string) => Promise<List[]>;
   getUsersInProject: (projectId: string) => User[];
-  
+  getProjectMembers: (projectId: string) => Promise<User[]>;
+
   createList: (title: string, type: 'personal' | 'project', projectId?: string) => Promise<void>;
   updateList: (id: string, updates: Partial<List>) => Promise<void>;
   deleteList: (id: string) => Promise<void>;
   reorderLists: (userId: string, listIds: string[]) => Promise<void>;
   reorderProjectLists: (projectId: string, listIds: string[]) => Promise<void>;
-  
+  shareList: (listId: string, userIds: string[]) => Promise<void>;
+
   addTaskToList: (listId: string, taskData: any) => Promise<void>;
   updateTask: (listId: string, taskId: string, updates: any) => Promise<void>;
   deleteTask: (listId: string, taskId: string) => Promise<void>;
-  moveTask: (taskId: string, sourceListId: string, targetListId: string) => Promise<void>;
-  
+  moveTask: (taskId: string, sourceListId: string, targetListId: string, targetIndex?: number) => Promise<void>;
+  archiveCompletedTasks: (listId: string) => Promise<void>;
+  unarchiveTask: (listId: string, taskId: string) => Promise<void>;
+  bulkDeleteArchivedTasks: (taskIds: string[]) => Promise<void>;
+
   addRoadmapIdea: (ideaData: any) => Promise<void>;
   updateRoadmapIdea: (id: string, updates: any) => Promise<void>;
   deleteRoadmapIdea: (id: string) => Promise<void>;
-  
+
+  inviteToProject: (projectId: string, userId: string) => Promise<void>;
+  removeFromProject: (projectId: string, userId: string) => Promise<void>;
+  acceptInvitation: (invitationId: string) => Promise<void>;
+  declineInvitation: (invitationId: string) => Promise<void>;
+
+  createOrganization: (name: string) => Promise<Organization>;
+  updateOrganization: (id: string, updates: Partial<Organization>) => Promise<void>;
+  deleteOrganization: (id: string) => Promise<void>;
+  assignUserToOrganization: (userId: string, organizationId: string | null) => Promise<void>;
+  setUserOrganizations: (userId: string, organizationIds: string[]) => Promise<void>;
+
+  updateProfile: (userId: string, updates: Partial<User>) => Promise<void>;
+  setUserAdmin: (userId: string, isAdmin: boolean) => Promise<void>;
+  deleteUser: (userId: string) => Promise<void>;
+
   refreshData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const PRESET_COLORS = [
-  '#3B82F6', '#EF4444', '#10B981', '#F59E0B', 
-  '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'
-];
+const GUEST_USER: User = {
+  id: 'guest',
+  name: 'Guest User',
+  email: 'guest@demo.local',
+  color: '#10B981',
+};
+
+function makeId() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function now() {
+  return new Date().toISOString();
+}
+
+function storageKey(userId: string, key: string) {
+  return `kanban_${userId}_${key}`;
+}
+
+function loadFromStorage<T>(userId: string, key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(storageKey(userId, key));
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveToStorage<T>(userId: string, key: string, value: T) {
+  try {
+    localStorage.setItem(storageKey(userId, key), JSON.stringify(value));
+  } catch {
+    // ignore
+  }
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useSupabase();
+  const { user, loading: authLoading } = useSupabase();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [lists, setLists] = useState<List[]>([]);
   const [roadmapIdeas, setRoadmapIdeas] = useState<RoadmapIdea[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [allProfiles, setAllProfiles] = useState<User[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<ProjectInvitation[]>([]);
+  const [isGuest, setIsGuest] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      initializeUserAndLoadData();
-    } else {
-      setCurrentUser(null);
-      setProjects([]);
-      setLists([]);
-      setRoadmapIdeas([]);
-      setLoading(false);
-    }
-  }, [user]);
-
-  const initializeUserAndLoadData = async () => {
-    if (!user) return;
-
+  const loadSupabaseData = useCallback(async (userId: string) => {
+    setDataLoading(true);
     try {
-      setLoading(true);
-      
-      let { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const projectIdsStr = await getProjectIds(userId);
+      const [profileRes, projectsRes, listsRes, sharedListMembersRes, roadmapRes, orgsRes, invitationsRes, allProfilesRes, userOrgsRes, allUserOrgsRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+        supabase.from('projects').select('*, project_members!inner(user_id)').eq('project_members.user_id', userId),
+        supabase.from('lists').select('*, tasks(*)').or(`user_id.eq.${userId},project_id.in.(${projectIdsStr})`).order('position'),
+        supabase.from('list_members').select('list_id').eq('user_id', userId),
+        supabase.from('roadmap_ideas').select('*').order('created_at', { ascending: false }),
+        supabase.from('organizations').select('*').order('name'),
+        supabase.from('project_invitations').select('*, project:projects(*), inviter:profiles!project_invitations_invited_by_fkey(*)').eq('invited_user_id', userId).eq('status', 'pending'),
+        supabase.from('profiles').select('*').order('name'),
+        supabase.from('user_organizations').select('organization_id').eq('user_id', userId),
+        supabase.from('user_organizations').select('user_id, organization_id'),
+      ]);
 
-      if (profileError && profileError.code === 'PGRST116') {
-        const newProfile = {
-          id: user.id,
-          name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
-          email: user.email || '',
-          color: PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)],
-        };
-
-        const { data: createdProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert([newProfile])
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        profile = createdProfile;
-      } else if (profileError) {
-        throw profileError;
+      // Build a map of userId -> organization_ids[]
+      const userOrgMap: Record<string, string[]> = {};
+      if (allUserOrgsRes.data) {
+        for (const row of allUserOrgsRes.data as UserOrganization[]) {
+          if (!userOrgMap[row.user_id]) userOrgMap[row.user_id] = [];
+          userOrgMap[row.user_id].push(row.organization_id);
+        }
       }
 
-      setCurrentUser(profile);
-      await loadAllData();
-    } catch (error) {
-      console.error('Error initializing user:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      // Current user's org ids
+      const myOrgIds = (userOrgsRes.data || []).map((r: any) => r.organization_id as string);
 
-  const loadAllData = async () => {
-    await Promise.all([
-      loadProjects(),
-      loadLists(),
-      loadRoadmapIdeas(),
-    ]);
-  };
+      const profileData = profileRes.data as User | null;
+      const isAdmin = profileData?.is_admin ?? false;
 
-  const loadProjects = async () => {
-    if (!user) return;
+      if (profileData) {
+        setCurrentUser({ ...profileData, organization_ids: myOrgIds });
+      }
 
-    try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('created_by', user.id)
-        .order('created_at', { ascending: false });
+      if (projectsRes.data) {
+        // Filter projects by org membership: show projects with no org, or projects whose org the user belongs to
+        const visibleProjects = (projectsRes.data as Project[]).filter(p =>
+          isAdmin || !p.organization_id || myOrgIds.includes(p.organization_id)
+        );
+        setProjects(visibleProjects);
+      }
 
-      if (error) throw error;
-      setProjects(data || []);
-    } catch (error) {
-      console.error('Error loading projects:', error);
-    }
-  };
+      // Fetch lists the user owns or is a project member of
+      let ownedLists: List[] = [];
+      if (listsRes.data) {
+        ownedLists = listsRes.data
+          .filter((l: any) => isAdmin || !l.organization_id || myOrgIds.includes(l.organization_id))
+          .map((l: any) => ({
+            ...l,
+            tasks: (l.tasks || []).map((t: any) => ({
+              ...t,
+              dueDate: t.due_date ? new Date(t.due_date) : undefined,
+            })),
+          }));
+      }
 
-  const loadLists = async () => {
-    if (!user) return;
-
-    try {
-      const { data: personalLists, error: personalError } = await supabase
-        .from('lists')
-        .select(`
-          *,
-          tasks (*)
-        `)
-        .eq('user_id', user.id)
-        .eq('type', 'personal')
-        .order('position', { ascending: true });
-
-      if (personalError) throw personalError;
-
-      const { data: projectMemberships, error: memberError } = await supabase
-        .from('project_members')
-        .select('project_id')
-        .eq('user_id', user.id);
-
-      let consolidatedProjectLists: List[] = [];
-
-      if (!memberError && projectMemberships && projectMemberships.length > 0) {
-        const projectIds = projectMemberships.map(m => m.project_id);
-        
-        const { data: userProjects, error: projectError } = await supabase
-          .from('projects')
-          .select('*')
-          .in('id', projectIds);
-
-        if (!projectError && userProjects) {
-          for (const project of userProjects) {
-            const { data: projectLists, error: listsError } = await supabase
-              .from('lists')
-              .select(`
-                *,
-                tasks (*)
-              `)
-              .eq('project_id', project.id);
-
-            if (!listsError && projectLists) {
-              const userAssignedTasks = projectLists
-                .flatMap(list => (list.tasks || []).map(task => ({
-                  ...task,
-                  dueDate: task.due_date ? new Date(task.due_date) : undefined
-                })))
-                .filter(task => task.assigned_to === user.id);
-
-              const consolidatedList: List = {
-                id: `project-${project.id}`,
-                title: project.name,
-                strategy: `Consolidated view of ${project.name} tasks assigned to you`,
-                type: 'project',
-                project_id: project.id,
-                user_id: user.id,
-                color: project.color,
-                position: (personalLists?.length || 0) + consolidatedProjectLists.length,
-                created_at: project.created_at,
-                updated_at: project.updated_at,
-                tasks: userAssignedTasks
-              };
-
-              consolidatedProjectLists.push(consolidatedList);
-            }
+      // Fetch shared lists (lists owned by others that this user is a member of)
+      let sharedLists: List[] = [];
+      if (sharedListMembersRes.data && sharedListMembersRes.data.length > 0) {
+        const sharedListIds = sharedListMembersRes.data.map((m: any) => m.list_id);
+        const ownedListIds = new Set(ownedLists.map(l => l.id));
+        const newSharedIds = sharedListIds.filter((id: string) => !ownedListIds.has(id));
+        if (newSharedIds.length > 0) {
+          const { data: sharedData } = await supabase
+            .from('lists')
+            .select('*, tasks(*)')
+            .in('id', newSharedIds);
+          if (sharedData) {
+            sharedLists = sharedData
+              .filter((l: any) => isAdmin || !l.organization_id || myOrgIds.includes(l.organization_id))
+              .map((l: any) => ({
+                ...l,
+                tasks: (l.tasks || []).map((t: any) => ({
+                  ...t,
+                  dueDate: t.due_date ? new Date(t.due_date) : undefined,
+                })),
+              }));
           }
         }
       }
 
-      const personalListsWithDates = (personalLists || []).map(list => ({
-        ...list,
-        tasks: (list.tasks || []).map(task => ({
-          ...task,
-          dueDate: task.due_date ? new Date(task.due_date) : undefined
-        }))
-      }));
-
-      setLists([...personalListsWithDates, ...consolidatedProjectLists]);
-    } catch (error) {
-      console.error('Error loading lists:', error);
-    }
-  };
-
-  const loadRoadmapIdeas = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('roadmap_ideas')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setRoadmapIdeas(data || []);
-    } catch (error) {
-      console.error('Error loading roadmap ideas:', error);
-    }
-  };
-
-  const createProject = async (name: string, description: string, assignedUserIds: string[], color?: string) => {
-    if (!currentUser) throw new Error('Not authenticated');
-
-    try {
-      const projectColor = color || PRESET_COLORS[projects.length % PRESET_COLORS.length];
-      
-      const { data: project, error: projectError } = await supabase
-        .from('projects')
-        .insert({
-          name,
-          description,
-          color: projectColor,
-          created_by: currentUser.id,
-        })
-        .select()
-        .single();
-
-      if (projectError) throw projectError;
-
-      const allMemberIds = [currentUser.id, ...assignedUserIds];
-      const uniqueMemberIds = [...new Set(allMemberIds)];
-      
-      if (uniqueMemberIds.length > 0) {
-        const { error: membersError } = await supabase
-          .from('project_members')
-          .insert(
-            uniqueMemberIds.map(userId => ({
-              project_id: project.id,
-              user_id: userId,
-            }))
-          );
-
-        if (membersError) throw membersError;
+      // Fetch list_members for all visible lists to populate shared_with
+      const allVisibleLists = [...ownedLists, ...sharedLists];
+      const allListIds = allVisibleLists.map(l => l.id);
+      let listMembersMap: Record<string, string[]> = {};
+      if (allListIds.length > 0) {
+        const { data: membersData } = await supabase
+          .from('list_members')
+          .select('list_id, user_id')
+          .in('list_id', allListIds);
+        if (membersData) {
+          for (const m of membersData) {
+            if (!listMembersMap[m.list_id]) listMembersMap[m.list_id] = [];
+            listMembersMap[m.list_id].push(m.user_id);
+          }
+        }
       }
 
-      await refreshData();
-    } catch (error) {
-      console.error('Error creating project:', error);
-      throw error;
+      const mappedLists: List[] = allVisibleLists.map(l => ({
+        ...l,
+        shared_with: listMembersMap[l.id] || [],
+      }));
+      setLists(mappedLists);
+
+      if (roadmapRes.data) {
+        setRoadmapIdeas(roadmapRes.data as RoadmapIdea[]);
+      }
+
+      if (orgsRes.data) {
+        setOrganizations(orgsRes.data as Organization[]);
+      }
+
+      if (invitationsRes.data) {
+        setPendingInvitations(invitationsRes.data as ProjectInvitation[]);
+      }
+
+      if (allProfilesRes.data) {
+        const profilesWithOrgs = (allProfilesRes.data as User[]).map(p => ({
+          ...p,
+          organization_ids: userOrgMap[p.id] || [],
+        }));
+        // Non-admins only see profiles from their own organizations (or themselves)
+        const visibleProfiles = isAdmin
+          ? profilesWithOrgs
+          : profilesWithOrgs.filter(p =>
+              p.id === userId ||
+              (userOrgMap[p.id] || []).some(orgId => myOrgIds.includes(orgId))
+            );
+        setAllProfiles(visibleProfiles);
+      }
+    } catch (err) {
+      console.error('Error loading data:', err);
+    } finally {
+      setDataLoading(false);
     }
+  }, []);
+
+  async function getProjectIds(userId: string): Promise<string> {
+    const { data } = await supabase.from('project_members').select('project_id').eq('user_id', userId);
+    if (!data || data.length === 0) return '00000000-0000-0000-0000-000000000000';
+    return data.map(d => d.project_id).join(',');
+  }
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (user) {
+      setIsGuest(false);
+      loadSupabaseData(user.id);
+    } else if (!isGuest) {
+      setCurrentUser(null);
+      setProjects([]);
+      setLists([]);
+      setRoadmapIdeas([]);
+      setAllProfiles([]);
+      setOrganizations([]);
+      setPendingInvitations([]);
+    }
+  }, [user, authLoading, loadSupabaseData]);
+
+  const refreshData = async () => {
+    if (user) await loadSupabaseData(user.id);
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setIsGuest(false);
+    setCurrentUser(null);
+    setProjects([]);
+    setLists([]);
+    setRoadmapIdeas([]);
+    setAllProfiles([]);
+    setOrganizations([]);
+    setPendingInvitations([]);
+  };
+
+  const continueAsGuest = () => {
+    setIsGuest(true);
+    setCurrentUser(GUEST_USER);
+    setProjects(loadFromStorage('guest', 'projects', []));
+    setLists(loadFromStorage<List[]>('guest', 'lists', []).map(l => ({
+      ...l,
+      tasks: (l.tasks || []).map(t => ({
+        ...t,
+        dueDate: t.due_date ? new Date(t.due_date) : undefined,
+      })),
+    })));
+    setRoadmapIdeas(loadFromStorage('guest', 'roadmap_ideas', []));
+    setAllProfiles([GUEST_USER]);
+  };
+
+  const persist = (key: string, value: any) => {
+    if (isGuest) saveToStorage('guest', key, value);
+  };
+
+  // ─── Projects ────────────────────────────────────────────────────────────────
+
+  const createProject = async (name: string, description: string, assignedUserIds: string[], color?: string) => {
+    if (!currentUser) return;
+
+    if (isGuest) {
+      const newProject: Project = {
+        id: makeId(), name, description,
+        color: color || PRESET_COLORS[projects.length % PRESET_COLORS.length],
+        created_by: currentUser.id, created_at: now(), updated_at: now(),
+      };
+      const updated = [newProject, ...projects];
+      setProjects(updated);
+      persist('projects', updated);
+      return;
+    }
+
+    const { data: project, error } = await supabase
+      .from('projects')
+      .insert({ name, description, color: color || PRESET_COLORS[projects.length % PRESET_COLORS.length], created_by: currentUser.id })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const memberIds = Array.from(new Set([currentUser.id, ...assignedUserIds]));
+    await supabase.from('project_members').insert(memberIds.map(uid => ({ project_id: project.id, user_id: uid })));
+
+    await refreshData();
   };
 
   const updateProject = async (id: string, updates: Partial<Project>) => {
-    try {
-      const { error } = await supabase
-        .from('projects')
-        .update(updates)
-        .eq('id', id);
-
-      if (error) throw error;
-      await loadProjects();
-    } catch (error) {
-      console.error('Error updating project:', error);
-      throw error;
+    if (isGuest) {
+      const updated = projects.map(p => p.id === id ? { ...p, ...updates, updated_at: now() } : p);
+      setProjects(updated);
+      persist('projects', updated);
+      return;
     }
+    const { error } = await supabase.from('projects').update(updates).eq('id', id);
+    if (error) throw error;
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates, updated_at: now() } : p));
   };
 
   const deleteProject = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      await refreshData();
-    } catch (error) {
-      console.error('Error deleting project:', error);
-      throw error;
+    if (isGuest) {
+      const updatedProjects = projects.filter(p => p.id !== id);
+      const updatedLists = lists.filter(l => l.project_id !== id);
+      setProjects(updatedProjects);
+      setLists(updatedLists);
+      persist('projects', updatedProjects);
+      persist('lists', updatedLists);
+      return;
     }
+    const { error } = await supabase.from('projects').delete().eq('id', id);
+    if (error) throw error;
+    setProjects(prev => prev.filter(p => p.id !== id));
+    setLists(prev => prev.filter(l => l.project_id !== id));
   };
+
+  const getProjectLists = (projectId: string): List[] =>
+    lists.filter(list => list.project_id === projectId);
+
+  const getUsersInProject = (projectId: string): User[] => allProfiles;
+
+  const getProjectMembers = async (projectId: string): Promise<User[]> => {
+    const { data, error } = await supabase
+      .from('project_members')
+      .select('user_id, profiles(*)')
+      .eq('project_id', projectId);
+    if (error) throw error;
+    return (data || []).map((d: any) => d.profiles).filter(Boolean) as User[];
+  };
+
+  // ─── Invitations ─────────────────────────────────────────────────────────────
+
+  const inviteToProject = async (projectId: string, userId: string) => {
+    if (!currentUser || isGuest) return;
+    const { error } = await supabase.from('project_invitations').upsert({
+      project_id: projectId,
+      invited_by: currentUser.id,
+      invited_user_id: userId,
+      status: 'pending',
+    }, { onConflict: 'project_id,invited_user_id' });
+    if (error) throw error;
+  };
+
+  const removeFromProject = async (projectId: string, userId: string) => {
+    if (!currentUser || isGuest) return;
+    const { error } = await supabase.from('project_members')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('user_id', userId);
+    if (error) throw error;
+    await refreshData();
+  };
+
+  const acceptInvitation = async (invitationId: string) => {
+    if (!currentUser || isGuest) return;
+    const invitation = pendingInvitations.find(i => i.id === invitationId);
+    if (!invitation) return;
+
+    await supabase.from('project_invitations').update({ status: 'accepted' }).eq('id', invitationId);
+    await supabase.from('project_members').upsert({
+      project_id: invitation.project_id,
+      user_id: currentUser.id,
+    }, { onConflict: 'project_id,user_id' });
 
   const getProjectLists = async (projectId: string): Promise<List[]> => {
     try {
@@ -385,286 +449,464 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const getUsersInProject = (projectId: string): User[] => {
-    return [];
+  const declineInvitation = async (invitationId: string) => {
+    if (!currentUser || isGuest) return;
+    await supabase.from('project_invitations').update({ status: 'declined' }).eq('id', invitationId);
+    setPendingInvitations(prev => prev.filter(i => i.id !== invitationId));
   };
 
+  // ─── Lists ───────────────────────────────────────────────────────────────────
+
   const createList = async (title: string, type: 'personal' | 'project', projectId?: string) => {
-    if (!currentUser) {
-      console.error('No current user');
+    if (!currentUser) return;
+
+    if (isGuest) {
+      const newList: List = {
+        id: makeId(), title, strategy: '', type,
+        project_id: projectId, user_id: currentUser.id,
+        color: undefined, position: lists.length,
+        created_at: now(), updated_at: now(), tasks: [],
+      };
+      const updated = [...lists, newList];
+      setLists(updated);
+      persist('lists', updated);
       return;
     }
 
-    try {
-      console.log('Creating list:', { title, type, projectId });
+    const projectListCount = projectId ? lists.filter(l => l.project_id === projectId).length : 0;
+    const userListCount = lists.filter(l => l.user_id === currentUser.id && !l.project_id).length;
+    const position = projectId ? projectListCount : userListCount;
 
-      const listData: any = {
-        title,
-        strategy: '',
-        type,
-        user_id: currentUser.id,
-        position: lists.length,
-      };
+    const { data, error } = await supabase
+      .from('lists')
+      .insert({ title, strategy: '', type, project_id: projectId || null, user_id: currentUser.id, position })
+      .select()
+      .single();
 
-      if (type === 'project' && projectId) {
-        listData.project_id = projectId;
-      } else if (type === 'personal') {
-        listData.project_id = null;
-      }
-
-      console.log('List data to insert:', listData);
-
-      const { data, error } = await supabase
-        .from('lists')
-        .insert(listData)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
-
-      console.log('Created list:', data);
-      await loadLists();
-    } catch (error) {
-      console.error('Error creating list:', error);
-      throw error;
-    }
+    if (error) throw error;
+    setLists(prev => [...prev, { ...data, tasks: [] }]);
   };
 
   const updateList = async (id: string, updates: Partial<List>) => {
-    try {
-      const { error } = await supabase
-        .from('lists')
-        .update(updates)
-        .eq('id', id);
-
-      if (error) throw error;
-      await loadLists();
-    } catch (error) {
-      console.error('Error updating list:', error);
-      throw error;
+    if (isGuest) {
+      const updated = lists.map(l => l.id === id ? { ...l, ...updates, updated_at: now() } : l);
+      setLists(updated);
+      persist('lists', updated);
+      return;
     }
+    const { strategy, title, color } = updates;
+    const dbUpdates: any = {};
+    if (strategy !== undefined) dbUpdates.strategy = strategy;
+    if (title !== undefined) dbUpdates.title = title;
+    if (color !== undefined) dbUpdates.color = color;
+    const { error } = await supabase.from('lists').update(dbUpdates).eq('id', id);
+    if (error) throw error;
+    setLists(prev => prev.map(l => l.id === id ? { ...l, ...updates, updated_at: now() } : l));
   };
 
   const deleteList = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('lists')
-        .delete()
-        .eq('id', id);
+    if (isGuest) {
+      const updated = lists.filter(l => l.id !== id);
+      setLists(updated);
+      persist('lists', updated);
+      return;
+    }
+    const { error } = await supabase.from('lists').delete().eq('id', id);
+    if (error) throw error;
+    setLists(prev => prev.filter(l => l.id !== id));
+  };
 
-      if (error) throw error;
-      await loadLists();
-    } catch (error) {
-      console.error('Error deleting list:', error);
-      throw error;
+  const reorderLists = async (_userId: string, listIds: string[]) => {
+    const map = new Map(listIds.map((id, idx) => [id, idx]));
+    setLists(prev => [...prev].sort((a, b) => (map.get(a.id) ?? a.position) - (map.get(b.id) ?? b.position)));
+    if (!isGuest) {
+      await Promise.all(listIds.map((id, position) =>
+        supabase.from('lists').update({ position }).eq('id', id)
+      ));
     }
   };
 
-  const reorderLists = async (userId: string, listIds: string[]) => {
-    console.log('Reorder lists:', listIds);
+  const reorderProjectLists = async (_projectId: string, listIds: string[]) => {
+    const map = new Map(listIds.map((id, idx) => [id, idx]));
+    setLists(prev => [...prev].sort((a, b) => (map.get(a.id) ?? a.position) - (map.get(b.id) ?? b.position)));
+    if (!isGuest) {
+      await Promise.all(listIds.map((id, position) =>
+        supabase.from('lists').update({ position }).eq('id', id)
+      ));
+    }
   };
 
-  const reorderProjectLists = async (projectId: string, listIds: string[]) => {
-    console.log('Reorder project lists:', listIds);
+  const shareList = async (listId: string, userIds: string[]) => {
+    if (isGuest || !currentUser) return;
+
+    // Remove all existing members then re-add
+    await supabase.from('list_members').delete().eq('list_id', listId);
+
+    if (userIds.length > 0) {
+      await supabase.from('list_members').insert(
+        userIds.map(uid => ({ list_id: listId, user_id: uid }))
+      );
+      await supabase.from('lists').update({ is_shared: true }).eq('id', listId);
+    } else {
+      await supabase.from('lists').update({ is_shared: false }).eq('id', listId);
+    }
+
+    setLists(prev => prev.map(l =>
+      l.id === listId
+        ? { ...l, is_shared: userIds.length > 0, shared_with: userIds }
+        : l
+    ));
   };
+
+  // ─── Tasks ───────────────────────────────────────────────────────────────────
 
   const addTaskToList = async (listId: string, taskData: any) => {
-    try {
-      let targetListId = listId;
-      
-      if (listId.startsWith('project-')) {
-        const projectId = listId.replace('project-', '');
-        
-        const { data: projectLists, error: listsError } = await supabase
-          .from('lists')
-          .select('*')
-          .eq('project_id', projectId)
-          .eq('user_id', currentUser?.id);
+    const tag = generateUniqueTag();
+    const list = lists.find(l => l.id === listId);
+    const position = list ? list.tasks.length : 0;
 
-        if (listsError) throw listsError;
-
-        if (projectLists && projectLists.length > 0) {
-          targetListId = projectLists[0].id;
-        } else {
-          const project = projects.find(p => p.id === projectId);
-          const { data: newList, error: createError } = await supabase
-            .from('lists')
-            .insert({
-              title: `${project?.name || 'Project'} - ${currentUser?.name}`,
-              strategy: '',
-              type: 'project',
-              project_id: projectId,
-              user_id: currentUser?.id,
-              position: 0,
-            })
-            .select()
-            .single();
-
-          if (createError) throw createError;
-          targetListId = newList.id;
-        }
-      }
-
-      const { error } = await supabase
-        .from('tasks')
-        .insert({
-          ...taskData,
-          tag: generateUniqueTag(),
-          list_id: targetListId,
-        });
-
-      if (error) throw error;
-      await loadLists();
-    } catch (error) {
-      console.error('Error adding task:', error);
-      throw error;
+    if (isGuest) {
+      const newTask: Task = {
+        id: makeId(), tag, title: taskData.title,
+        description: taskData.description || undefined,
+        priority: taskData.priority || 'medium', completed: false,
+        list_id: listId, assigned_to: taskData.assigned_to || undefined,
+        due_date: taskData.due_date || undefined, position,
+        created_at: now(), updated_at: now(),
+        dueDate: taskData.due_date ? new Date(taskData.due_date) : undefined,
+      };
+      const updated = lists.map(l => l.id === listId ? { ...l, tasks: [...l.tasks, newTask] } : l);
+      setLists(updated);
+      persist('lists', updated);
+      return;
     }
+
+    const { data, error } = await supabase.from('tasks').insert({
+      tag, title: taskData.title, description: taskData.description || null,
+      priority: taskData.priority || 'medium', completed: false,
+      list_id: listId, assigned_to: taskData.assigned_to || null,
+      due_date: taskData.due_date || null, position,
+      start_time: taskData.start_time || null,
+      end_time: taskData.end_time || null,
+      duration_minutes: taskData.duration_minutes || null,
+      no_time_assigned: taskData.no_time_assigned || false,
+      use_duration: taskData.use_duration || false,
+      goal_date: taskData.goal_date || null,
+      limit_date: taskData.limit_date || null,
+    }).select().single();
+
+    if (error) throw error;
+    const newTask: Task = { ...data, dueDate: data.due_date ? new Date(data.due_date) : undefined };
+    setLists(prev => prev.map(l => l.id === listId ? { ...l, tasks: [...l.tasks, newTask] } : l));
   };
 
   const updateTask = async (listId: string, taskId: string, updates: any) => {
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update(updates)
-        .eq('id', taskId);
-
-      if (error) throw error;
-      await loadLists();
-    } catch (error) {
-      console.error('Error updating task:', error);
-      throw error;
+    if (isGuest) {
+      const updated = lists.map(l =>
+        l.id === listId ? {
+          ...l,
+          tasks: l.tasks.map(t => t.id === taskId
+            ? { ...t, ...updates, dueDate: updates.due_date ? new Date(updates.due_date) : t.dueDate, updated_at: now() }
+            : t
+          ),
+        } : l
+      );
+      setLists(updated);
+      persist('lists', updated);
+      return;
     }
+
+    const dbUpdates: any = { ...updates };
+    delete dbUpdates.dueDate;
+    if (updates.completed === true && !dbUpdates.completed_at) {
+      const currentTask = lists.find(l => l.id === listId)?.tasks.find(t => t.id === taskId);
+      if (!currentTask?.completed_at) dbUpdates.completed_at = now();
+    }
+    const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', taskId);
+    if (error) throw error;
+    const completedAtUpdate = updates.completed === true ? { completed_at: dbUpdates.completed_at || now() } : {};
+    setLists(prev => prev.map(l =>
+      l.id === listId ? {
+        ...l,
+        tasks: l.tasks.map(t => t.id === taskId
+          ? { ...t, ...updates, ...completedAtUpdate, dueDate: updates.due_date ? new Date(updates.due_date) : t.dueDate, updated_at: now() }
+          : t
+        ),
+      } : l
+    ));
   };
 
   const deleteTask = async (listId: string, taskId: string) => {
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
+    if (isGuest) {
+      const updated = lists.map(l => l.id === listId ? { ...l, tasks: l.tasks.filter(t => t.id !== taskId) } : l);
+      setLists(updated);
+      persist('lists', updated);
+      return;
+    }
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    if (error) throw error;
+    setLists(prev => prev.map(l => l.id === listId ? { ...l, tasks: l.tasks.filter(t => t.id !== taskId) } : l));
+  };
 
-      if (error) throw error;
-      await loadLists();
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      throw error;
+  const moveTask = async (taskId: string, sourceListId: string, targetListId: string, targetIndex?: number) => {
+    const sourceList = lists.find(l => l.id === sourceListId);
+    const task = sourceList?.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    setLists(prev => prev.map(l => {
+      if (l.id === sourceListId && l.id !== targetListId) {
+        return { ...l, tasks: l.tasks.filter(t => t.id !== taskId) };
+      }
+      if (l.id === targetListId) {
+        const withoutTask = l.tasks.filter(t => t.id !== taskId);
+        const updatedTask = { ...task, list_id: targetListId };
+        if (targetIndex === undefined || targetIndex >= withoutTask.length) {
+          return { ...l, tasks: [...withoutTask, updatedTask] };
+        }
+        const newTasks = [...withoutTask];
+        newTasks.splice(targetIndex, 0, updatedTask);
+        return { ...l, tasks: newTasks };
+      }
+      return l;
+    }));
+
+    if (!isGuest) {
+      const updates: any = { list_id: targetListId };
+      if (targetIndex !== undefined) {
+        updates.position = targetIndex;
+      }
+      await supabase.from('tasks').update(updates).eq('id', taskId);
     }
   };
 
-  const moveTask = async (taskId: string, sourceListId: string, targetListId: string) => {
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ list_id: targetListId })
-        .eq('id', taskId);
-
-      if (error) throw error;
-      await loadLists();
-    } catch (error) {
-      console.error('Error moving task:', error);
-      throw error;
+  const archiveCompletedTasks = async (listId: string) => {
+    const archiveTime = now();
+    if (isGuest) {
+      const updated = lists.map(l =>
+        l.id === listId ? {
+          ...l,
+          tasks: l.tasks.map(t =>
+            t.completed ? { ...t, archived_at: archiveTime, completed_at: t.completed_at || archiveTime } : t
+          ),
+        } : l
+      );
+      setLists(updated);
+      persist('lists', updated);
+      return;
     }
+    const list = lists.find(l => l.id === listId);
+    if (!list) return;
+    const completedIds = list.tasks.filter(t => t.completed && !t.archived_at).map(t => t.id);
+    if (completedIds.length === 0) return;
+    await supabase.from('tasks')
+      .update({ archived_at: archiveTime, completed_at: archiveTime })
+      .in('id', completedIds)
+      .is('completed_at', null);
+    await supabase.from('tasks')
+      .update({ archived_at: archiveTime })
+      .in('id', completedIds)
+      .not('completed_at', 'is', null);
+    setLists(prev => prev.map(l =>
+      l.id === listId ? {
+        ...l,
+        tasks: l.tasks.map(t =>
+          t.completed && !t.archived_at
+            ? { ...t, archived_at: archiveTime, completed_at: t.completed_at || archiveTime }
+            : t
+        ),
+      } : l
+    ));
   };
+
+  const unarchiveTask = async (listId: string, taskId: string) => {
+    if (isGuest) {
+      const updated = lists.map(l =>
+        l.id === listId ? {
+          ...l,
+          tasks: l.tasks.map(t => t.id === taskId ? { ...t, archived_at: undefined, completed: false, completed_at: undefined } : t),
+        } : l
+      );
+      setLists(updated);
+      persist('lists', updated);
+      return;
+    }
+    await supabase.from('tasks').update({ archived_at: null, completed: false, completed_at: null }).eq('id', taskId);
+    setLists(prev => prev.map(l =>
+      l.id === listId ? {
+        ...l,
+        tasks: l.tasks.map(t => t.id === taskId ? { ...t, archived_at: undefined, completed: false, completed_at: undefined } : t),
+      } : l
+    ));
+  };
+
+  const bulkDeleteArchivedTasks = async (taskIds: string[]) => {
+    if (taskIds.length === 0) return;
+    if (isGuest) {
+      const idSet = new Set(taskIds);
+      const updated = lists.map(l => ({ ...l, tasks: l.tasks.filter(t => !idSet.has(t.id)) }));
+      setLists(updated);
+      persist('lists', updated);
+      return;
+    }
+    await supabase.from('tasks').delete().in('id', taskIds);
+    const idSet = new Set(taskIds);
+    setLists(prev => prev.map(l => ({ ...l, tasks: l.tasks.filter(t => !idSet.has(t.id)) })));
+  };
+
+  // ─── Roadmap ─────────────────────────────────────────────────────────────────
 
   const addRoadmapIdea = async (ideaData: any) => {
     if (!currentUser) return;
-
-    try {
-      const { error } = await supabase
-        .from('roadmap_ideas')
-        .insert({
-          ...ideaData,
-          created_by: currentUser.id,
-        });
-
-      if (error) throw error;
-      await loadRoadmapIdeas();
-    } catch (error) {
-      console.error('Error adding roadmap idea:', error);
-      throw error;
+    if (isGuest) {
+      const newIdea: RoadmapIdea = {
+        id: makeId(), title: ideaData.title, description: ideaData.description,
+        category: ideaData.category, image_url: ideaData.image_url || undefined,
+        created_by: currentUser.id, created_at: now(), updated_at: now(),
+      };
+      const updated = [newIdea, ...roadmapIdeas];
+      setRoadmapIdeas(updated);
+      persist('roadmap_ideas', updated);
+      return;
     }
+    const { data, error } = await supabase.from('roadmap_ideas').insert({
+      title: ideaData.title, description: ideaData.description,
+      category: ideaData.category, image_url: ideaData.image_url || null,
+      created_by: currentUser.id,
+    }).select().single();
+    if (error) throw error;
+    setRoadmapIdeas(prev => [data as RoadmapIdea, ...prev]);
   };
 
   const updateRoadmapIdea = async (id: string, updates: any) => {
-    try {
-      const { error } = await supabase
-        .from('roadmap_ideas')
-        .update(updates)
-        .eq('id', id);
-
-      if (error) throw error;
-      await loadRoadmapIdeas();
-    } catch (error) {
-      console.error('Error updating roadmap idea:', error);
-      throw error;
+    if (isGuest) {
+      const updated = roadmapIdeas.map(r => r.id === id ? { ...r, ...updates, updated_at: now() } : r);
+      setRoadmapIdeas(updated);
+      persist('roadmap_ideas', updated);
+      return;
     }
+    const { error } = await supabase.from('roadmap_ideas').update(updates).eq('id', id);
+    if (error) throw error;
+    setRoadmapIdeas(prev => prev.map(r => r.id === id ? { ...r, ...updates, updated_at: now() } : r));
   };
 
   const deleteRoadmapIdea = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('roadmap_ideas')
-        .delete()
-        .eq('id', id);
+    if (isGuest) {
+      const updated = roadmapIdeas.filter(r => r.id !== id);
+      setRoadmapIdeas(updated);
+      persist('roadmap_ideas', updated);
+      return;
+    }
+    const { error } = await supabase.from('roadmap_ideas').delete().eq('id', id);
+    if (error) throw error;
+    setRoadmapIdeas(prev => prev.filter(r => r.id !== id));
+  };
 
+  // ─── Organizations ───────────────────────────────────────────────────────────
+
+  const createOrganization = async (name: string): Promise<Organization> => {
+    if (!currentUser) throw new Error('Not authenticated');
+    const { data, error } = await supabase.from('organizations').insert({
+      name, created_by: currentUser.id,
+    }).select().single();
+    if (error) throw error;
+    const org = data as Organization;
+    setOrganizations(prev => [...prev, org].sort((a, b) => a.name.localeCompare(b.name)));
+    return org;
+  };
+
+  const updateOrganization = async (id: string, updates: Partial<Organization>) => {
+    const { error } = await supabase.from('organizations').update(updates).eq('id', id);
+    if (error) throw error;
+    setOrganizations(prev => prev.map(o => o.id === id ? { ...o, ...updates } : o));
+  };
+
+  const deleteOrganization = async (id: string) => {
+    const { error } = await supabase.from('organizations').delete().eq('id', id);
+    if (error) throw error;
+    setOrganizations(prev => prev.filter(o => o.id !== id));
+    setAllProfiles(prev => prev.map(p => p.organization_id === id ? { ...p, organization_id: null } : p));
+  };
+
+  const assignUserToOrganization = async (userId: string, organizationId: string | null) => {
+    const { error } = await supabase.from('profiles').update({ organization_id: organizationId }).eq('id', userId);
+    if (error) throw error;
+    setAllProfiles(prev => prev.map(p => p.id === userId ? { ...p, organization_id: organizationId } : p));
+    if (currentUser?.id === userId) setCurrentUser(prev => prev ? { ...prev, organization_id: organizationId } : null);
+  };
+
+  const setUserOrganizations = async (userId: string, organizationIds: string[]) => {
+    await supabase.from('user_organizations').delete().eq('user_id', userId);
+    if (organizationIds.length > 0) {
+      const { error } = await supabase.from('user_organizations').insert(
+        organizationIds.map(orgId => ({ user_id: userId, organization_id: orgId }))
+      );
       if (error) throw error;
-      await loadRoadmapIdeas();
-    } catch (error) {
-      console.error('Error deleting roadmap idea:', error);
-      throw error;
+    }
+    setAllProfiles(prev => prev.map(p => p.id === userId ? { ...p, organization_ids: organizationIds } : p));
+    if (currentUser?.id === userId) {
+      setCurrentUser(prev => prev ? { ...prev, organization_ids: organizationIds } : null);
     }
   };
 
-  const refreshData = async () => {
-    await loadAllData();
+  // ─── Admin: Profile Management ───────────────────────────────────────────────
+
+  const updateProfile = async (userId: string, updates: Partial<User>) => {
+    const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
+    if (error) throw error;
+    setAllProfiles(prev => prev.map(p => p.id === userId ? { ...p, ...updates } : p));
+    if (currentUser?.id === userId) setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
+  };
+
+  const setUserAdmin = async (userId: string, isAdmin: boolean) => {
+    const { error } = await supabase.from('profiles').update({ is_admin: isAdmin }).eq('id', userId);
+    if (error) throw error;
+    setAllProfiles(prev => prev.map(p => p.id === userId ? { ...p, is_admin: isAdmin } : p));
+  };
+
+  const deleteUser = async (userId: string) => {
+    await supabase.from('user_organizations').delete().eq('user_id', userId);
+    await supabase.from('project_members').delete().eq('user_id', userId);
+    await supabase.from('list_members').delete().eq('user_id', userId);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+      {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ userId }),
+      }
+    );
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed to delete user');
+    setAllProfiles(prev => prev.filter(p => p.id !== userId));
   };
 
   const value: AppContextType = {
-    currentUser,
-    projects,
-    lists,
-    roadmapIdeas,
-    loading,
-    isAuthenticated: !!user,
-    
-    createProject,
-    updateProject,
-    deleteProject,
-    getProjectLists,
-    getUsersInProject,
-    
-    createList,
-    updateList,
-    deleteList,
-    reorderLists,
-    reorderProjectLists,
-    
-    addTaskToList,
-    updateTask,
-    deleteTask,
-    moveTask,
-    
-    addRoadmapIdea,
-    updateRoadmapIdea,
-    deleteRoadmapIdea,
-    
+    currentUser, projects, lists, roadmapIdeas, allProfiles, organizations, pendingInvitations,
+    loading: authLoading || dataLoading,
+    isAuthenticated: !!user || isGuest,
+    isGuest,
+    continueAsGuest,
+    logout,
+
+    createProject, updateProject, deleteProject, getProjectLists, getUsersInProject, getProjectMembers,
+    createList, updateList, deleteList, reorderLists, reorderProjectLists, shareList,
+    addTaskToList, updateTask, deleteTask, moveTask, archiveCompletedTasks, unarchiveTask, bulkDeleteArchivedTasks,
+    addRoadmapIdea, updateRoadmapIdea, deleteRoadmapIdea,
+    inviteToProject, removeFromProject, acceptInvitation, declineInvitation,
+    createOrganization, updateOrganization, deleteOrganization, assignUserToOrganization, setUserOrganizations,
+    updateProfile, setUserAdmin, deleteUser,
     refreshData,
   };
 
-  return (
-    <AppContext.Provider value={value}>
-      {children}
-    </AppContext.Provider>
-  );
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 export function useApp() {
   const context = useContext(AppContext);
-  if (context === undefined) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
+  if (context === undefined) throw new Error('useApp must be used within an AppProvider');
   return context;
 }

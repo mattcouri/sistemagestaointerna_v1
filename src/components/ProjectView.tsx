@@ -5,6 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { ListColumn } from './ListColumn';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { useListDragAndDrop } from '../hooks/useListDragAndDrop';
+import { ProjectTasksArchive } from './ProjectTasksArchive';
 
 interface ProjectViewProps {
   project: any;
@@ -18,13 +19,23 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
   const [projectLists, setProjectLists] = useState<any[]>([]);
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
-  const { draggedTask, handleDragStart, handleDragEnd, handleDragOver } = useDragAndDrop();
-  const { 
-    draggedList, 
-    handleListDragStart, 
-    handleListDragEnd, 
-    handleListDragOver, 
-    handleListDrop 
+  const [showArchive, setShowArchive] = useState(false);
+  const {
+    draggedTask,
+    dropTarget,
+    handleDragStart,
+    handleDragEnd,
+    handleDragOver,
+    handleTaskDragOver,
+    handleListAreaDragOver,
+  } = useDragAndDrop();
+  const {
+    draggedList,
+    dropTargetIndex,
+    handleListDragStart,
+    handleListDragEnd,
+    handleListDragOver,
+    handleListDrop
   } = useListDragAndDrop();
 
   const projectUsers = getUsersInProject(project.id);
@@ -53,17 +64,12 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
     }
   };
 
-  const handleDrop = (e: React.DragEvent, targetListId: string) => {
+  const handleDrop = (e: React.DragEvent, targetListId: string, targetIndex?: number) => {
     e.preventDefault();
-    handleDragEnd();
-    
-    if (!draggedTask) return;
-    
+    if (!draggedTask) { handleDragEnd(); return; }
     const { task, sourceListId } = draggedTask;
-    
-    if (sourceListId === targetListId) return;
-
-    moveTask(task.id, sourceListId, targetListId);
+    handleDragEnd();
+    moveTask(task.id, sourceListId, targetListId, targetIndex);
   };
 
   const handleListReorder = (sourceIndex: number, targetIndex: number) => {
@@ -73,6 +79,10 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
     
     reorderProjectLists(project.id, newListOrder.map(list => list.id));
   };
+
+  if (showArchive) {
+    return <ProjectTasksArchive project={project} onBack={() => setShowArchive(false)} />;
+  }
 
   return (
     <div className="p-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
@@ -123,8 +133,15 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
             </div>
             
             <button
+              onClick={() => setShowArchive(true)}
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center space-x-2 text-sm font-medium"
+            >
+              <CheckSquare className="w-4 h-4" />
+              <span>Completed Tasks</span>
+            </button>
+            <button
               onClick={onTVDashboard}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
             >
               <Monitor className="w-5 h-5" />
               <span>TV Dashboard</span>
@@ -136,20 +153,33 @@ export function ProjectView({ project, onBack, onTVDashboard }: ProjectViewProps
           {projectLists.map((list, index) => (
             <div
               key={list.id}
-              draggable
-              onDragStart={() => handleListDragStart(list.id, index)}
-              onDragEnd={handleListDragEnd}
-              onDragOver={handleListDragOver}
-              onDrop={(e) => handleListDrop(e, index, handleListReorder)}
-              className={`transition-opacity ${draggedList?.listId === list.id ? 'opacity-50' : ''}`}
+              className="flex items-stretch"
             >
-            <ListColumn
-              list={list}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              projectUsers={projectUsers}
-            />
+              {dropTargetIndex === index && draggedList && draggedList.listId !== list.id && (
+                <div className="w-1 rounded-full bg-blue-400 mr-3 my-1 flex-shrink-0 animate-pulse" />
+              )}
+              <div
+                draggable
+                onDragStart={(e) => { e.stopPropagation(); handleListDragStart(list.id, index); }}
+                onDragEnd={handleListDragEnd}
+                onDragOver={(e) => handleListDragOver(e, index)}
+                onDrop={(e) => handleListDrop(e, index, handleListReorder)}
+                className={`transition-all duration-150 cursor-grab active:cursor-grabbing ${
+                  draggedList?.listId === list.id ? 'opacity-40 scale-95' : ''
+                }`}
+              >
+                <ListColumn
+                  list={list}
+                  draggedTask={draggedTask}
+                  dropTarget={dropTarget}
+                  onTaskDragStart={handleDragStart}
+                  onTaskDragEnd={handleDragEnd}
+                  onTaskDragOver={handleTaskDragOver}
+                  onListAreaDragOver={handleListAreaDragOver}
+                  onDrop={handleDrop}
+                  projectUsers={projectUsers}
+                />
+              </div>
             </div>
           ))}
 

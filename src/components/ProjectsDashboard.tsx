@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
-import { FolderOpen, Users, Calendar, Plus, Settings, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { FolderOpen, Users, Calendar, Plus, Settings, CheckCheck, Clock, Target, UserPlus } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { CreateProjectModal } from './CreateProjectModal';
 import { EditProjectModal } from './EditProjectModal';
 import { ProjectView } from './ProjectView';
 import { ProjectTVDashboard } from './ProjectTVDashboard';
+import { ProjectMembersModal } from './ProjectMembersModal';
 
 export function ProjectsDashboard() {
-  const { projects, currentUser, lists } = useApp();
+  const { projects, currentUser, lists, allProfiles } = useApp();
   const { t } = useLanguage();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [showTVDashboard, setShowTVDashboard] = useState(false);
   const [editingProject, setEditingProject] = useState<string | null>(null);
+  const [managingMembersProject, setManagingMembersProject] = useState<string | null>(null);
 
   if (!currentUser) return null;
 
@@ -74,53 +76,37 @@ export function ProjectsDashboard() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <FolderOpen className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-800 dark:text-white">{userProjects.length}</p>
-                <p className="text-sm text-slate-600 dark:text-slate-400">{t('projects.activeProjects')}</p>
-              </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/60 rounded-xl px-5 py-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">{t('projects.activeProjects')}</p>
+              <p className="text-3xl font-bold text-blue-900 dark:text-white">{userProjects.length}</p>
             </div>
+            <FolderOpen className="w-8 h-8 text-blue-300 dark:text-blue-400" />
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-800 dark:text-white">{completedTasks}</p>
-                <p className="text-sm text-slate-600 dark:text-slate-400">{t('projects.completedTasks')}</p>
-              </div>
+          <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-500/60 rounded-xl px-5 py-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-1">{t('projects.completedTasks')}</p>
+              <p className="text-3xl font-bold text-green-900 dark:text-white">{completedTasks}</p>
             </div>
+            <CheckCheck className="w-8 h-8 text-green-300 dark:text-green-400" />
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-                <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-800 dark:text-white">{totalTasks - completedTasks}</p>
-                <p className="text-sm text-slate-600 dark:text-slate-400">{t('projects.pendingTasks')}</p>
-              </div>
+          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-500/60 rounded-xl px-5 py-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-1">{t('projects.pendingTasks')}</p>
+              <p className="text-3xl font-bold text-amber-900 dark:text-white">{totalTasks - completedTasks}</p>
             </div>
+            <Clock className="w-8 h-8 text-amber-300 dark:text-amber-400" />
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-800 dark:text-white">{highPriorityTasks}</p>
-                <p className="text-sm text-slate-600 dark:text-slate-400">{t('projects.highPriority')}</p>
-              </div>
+          <div className="bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-500/60 rounded-xl px-5 py-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-orange-600 dark:text-orange-400 mb-1">{t('projects.highPriority')}</p>
+              <p className="text-3xl font-bold text-orange-900 dark:text-white">{highPriorityTasks}</p>
             </div>
+            <Target className="w-8 h-8 text-orange-300 dark:text-orange-400" />
           </div>
         </div>
 
@@ -148,7 +134,17 @@ export function ProjectsDashboard() {
                   style={{ backgroundColor: project.color }}
                 />
                 <div className="p-6" onClick={() => setSelectedProject(project.id)}>
-                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setManagingMembersProject(project.id);
+                      }}
+                      className="w-8 h-8 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors"
+                      title="Manage members"
+                    >
+                      <UserPlus className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -187,7 +183,7 @@ export function ProjectsDashboard() {
         {showCreateModal && (
           <CreateProjectModal
             onClose={() => setShowCreateModal(false)}
-            availableUsers={[]} // Empty for now since we don't have users array
+            availableUsers={allProfiles}
           />
         )}
 
@@ -195,9 +191,19 @@ export function ProjectsDashboard() {
           <EditProjectModal
             project={editingProjectData}
             onClose={() => setEditingProject(null)}
-            availableUsers={[]} // Empty for now since we don't have users array
+            availableUsers={allProfiles}
           />
         )}
+
+        {managingMembersProject && (() => {
+          const proj = projects.find(p => p.id === managingMembersProject);
+          return proj ? (
+            <ProjectMembersModal
+              project={proj}
+              onClose={() => setManagingMembersProject(null)}
+            />
+          ) : null;
+        })()}
       </div>
     </div>
   );
