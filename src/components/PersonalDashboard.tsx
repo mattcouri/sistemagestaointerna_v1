@@ -35,33 +35,33 @@ export function PersonalDashboard() {
     handleListDrop,
   } = useListDragAndDrop();
 
-  if (!currentUser) return null;
-
-  const allPersonalLists = lists;
-
-  const allTasks = useMemo(() =>
-    allPersonalLists.flatMap(l => (l.tasks || []).map((t: any) => ({ ...t, _listId: l.id, _projectId: l.project_id }))),
-    [allPersonalLists]
-  );
-
-  const now = new Date();
-
-  const kpiActive = allTasks.filter(t => !t.completed).length;
-  const kpiCompleted = allTasks.filter(t => t.completed).length;
-  const kpiOverdue = allTasks.filter(t => {
-    if (t.completed) return false;
-    const d = t.limit_date || t.due_date;
-    if (!d) return false;
-    return new Date(d) < now;
-  }).length;
-  const kpiHighPriority = allTasks.filter(t => !t.completed && t.priority === 'high').length;
+  // Base: include lists owned by current user OR shared with current user
+  // Exclude other users' private (non-shared, non-project) lists
+  const allPersonalLists = useMemo(() => {
+    if (!currentUser) return [];
+    return lists.filter(l => {
+      const isOwned = l.user_id === currentUser.id;
+      const isSharedWithMe = !isOwned && (l.is_shared || (l.shared_with && l.shared_with.length > 0));
+      return isOwned || isSharedWithMe;
+    });
+  }, [lists, currentUser]);
 
   const filteredLists = useMemo(() => {
-    if (!searchQuery && !filterProject && !filterPriority) return allPersonalLists;
-    return allPersonalLists.map(list => {
-      if (filterProject && list.project_id !== filterProject && !(filterProject === '__personal' && !list.project_id)) {
-        return { ...list, tasks: [] };
-      }
+    if (!currentUser) return [];
+    let base = allPersonalLists;
+
+    if (filterProject === '__personal') {
+      base = base.filter(l =>
+        l.user_id === currentUser.id &&
+        !l.project_id &&
+        !l.is_shared &&
+        (!l.shared_with || l.shared_with.length === 0)
+      );
+    } else if (filterProject) {
+      base = base.filter(l => l.project_id === filterProject);
+    }
+
+    return base.map(list => {
       const filtered = (list.tasks || []).filter((task: any) => {
         const matchSearch = !searchQuery || task.title.toLowerCase().includes(searchQuery.toLowerCase());
         const matchPriority = !filterPriority || task.priority === filterPriority;
@@ -69,7 +69,26 @@ export function PersonalDashboard() {
       });
       return { ...list, tasks: filtered };
     });
-  }, [allPersonalLists, searchQuery, filterProject, filterPriority]);
+  }, [allPersonalLists, searchQuery, filterProject, filterPriority, currentUser]);
+
+  const kpiTasks = useMemo(() =>
+    filteredLists.flatMap(l => (l.tasks || []).map((t: any) => ({ ...t, _listId: l.id, _projectId: l.project_id }))),
+    [filteredLists]
+  );
+
+  const now = new Date();
+
+  const kpiActive = kpiTasks.filter(t => !t.completed).length;
+  const kpiCompleted = kpiTasks.filter(t => t.completed).length;
+  const kpiOverdue = kpiTasks.filter(t => {
+    if (t.completed) return false;
+    const d = t.limit_date || t.due_date;
+    if (!d) return false;
+    return new Date(d) < now;
+  }).length;
+  const kpiHighPriority = kpiTasks.filter(t => !t.completed && t.priority === 'high').length;
+
+  if (!currentUser) return null;
 
   const handleCreateList = (e: React.FormEvent) => {
     e.preventDefault();
