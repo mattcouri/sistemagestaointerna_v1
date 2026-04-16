@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Lock, CheckSquare, CalendarX, Target, Search, CheckCheck } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Plus, CheckSquare, CalendarX, Target, Search, CheckCheck } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ListColumn } from './ListColumn';
@@ -16,6 +16,7 @@ export function PersonalDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
+  const newListRef = useRef<HTMLDivElement>(null);
   const {
     draggedTask,
     dropTarget,
@@ -156,9 +157,15 @@ export function PersonalDashboard() {
               <CheckSquare className="w-4 h-4" />
               Completed Tasks
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-medium rounded-lg transition-colors">
-              <Lock className="w-4 h-4" />
-              Projects
+            <button
+              onClick={() => {
+                setIsCreatingList(true);
+                setTimeout(() => newListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' }), 50);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New List
             </button>
             {firstListId && (
               <button
@@ -264,7 +271,7 @@ export function PersonalDashboard() {
           ))}
 
           {/* Create New List */}
-          <div className="w-72 flex-shrink-0">
+          <div ref={newListRef} className="w-72 flex-shrink-0">
             {!isCreatingList ? (
               <button
                 onClick={() => setIsCreatingList(true)}
