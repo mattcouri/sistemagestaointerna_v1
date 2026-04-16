@@ -843,11 +843,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await supabase.from('user_organizations').delete().eq('user_id', userId);
     await supabase.from('project_members').delete().eq('user_id', userId);
     await supabase.from('list_members').delete().eq('user_id', userId);
-    const { error } = await supabase.auth.admin.deleteUser(userId);
-    if (error) {
-      const { error: profileError } = await supabase.from('profiles').delete().eq('id', userId);
-      if (profileError) throw profileError;
-    }
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+      {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ userId }),
+      }
+    );
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed to delete user');
     setAllProfiles(prev => prev.filter(p => p.id !== userId));
   };
 
